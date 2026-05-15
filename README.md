@@ -145,7 +145,7 @@ You can change the buzzer GPIO later in the web interface under **Buzzer**. The 
 
 ## Flashing
 
-1. Download the latest firmware from [Releases](../../releases). **If you are flashing a new device for the first time**, use the file ending with **-Full** (for example `BambuHelper-esp32s3-v2.7-Full.bin`). The regular `-ota.bin` file is for OTA updates on devices that already have BambuHelper installed.
+1. Download the latest firmware from [Releases](../../releases). **If you are flashing a new device for the first time**, use the file ending with **-Full** (for example `BambuHelper-esp32s3-v3.1-Full.bin`). The regular `-ota.bin` file is for OTA updates on devices that already have BambuHelper installed.
 2. Open [ESP Web Flasher](https://espressif.github.io/esptool-js/) in Chrome or Edge
 3. If you are flashing a **CYD**, set **Baudrate** to **115200** before clicking **Connect**. Two or more attempts may be needed - the first one will fail. This applies to **CYD only**.
 4. Connect your ESP32 via USB
@@ -158,12 +158,14 @@ You can change the buzzer GPIO later in the web interface under **Buzzer**. The 
 
 | Board | Use this `Full` file for first flash / recovery |
 |---|---|
-| ESP32-S3 Super Mini | `BambuHelper-esp32s3-v2.7-Full.bin` |
-| Waveshare ESP32-S3-Zero | `BambuHelper-esp32s3_zero-v2.7-Full.bin` |
-| CYD / ESP32-2432S028 | `BambuHelper-cyd-v2.7-Full.bin` |
-| Waveshare ESP32-S3-Touch-LCD-2 | `BambuHelper-ws_lcd_200-v2.7-Full.bin` |
-| Waveshare ESP32-S3-Touch-LCD-1.54 | `BambuHelper-ws_lcd_154-v2.7-Full.bin` |
-| ESP32-C3 Super Mini | `BambuHelper-esp32c3-v2.7-Full.bin` |
+| ESP32-S3 Super Mini | `BambuHelper-esp32s3-v3.1-Full.bin` |
+| Waveshare ESP32-S3-Zero | `BambuHelper-esp32s3_zero-v3.1-Full.bin` |
+| CYD / ESP32-2432S028 | `BambuHelper-cyd-v3.1-Full.bin` |
+| TZT L1435-2.4 | `BambuHelper-tzt_2432-v3.1-Full.bin` |
+| Waveshare ESP32-S3-Touch-LCD-2 | `BambuHelper-ws_lcd_200-v3.1-Full.bin` |
+| Waveshare ESP32-S3-Touch-LCD-1.54 | `BambuHelper-ws_lcd_154-v3.1-Full.bin` |
+| ESP32-C3 Super Mini | `BambuHelper-esp32c3-v3.1-Full.bin` |
+| Seeed SenseCAP Indicator | `BambuHelper-sensecap_indicator-v3.1-Full.bin` |
 
 ## Setup
 
