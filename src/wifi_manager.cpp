@@ -2,6 +2,7 @@
 #include "settings.h"
 #include "display_ui.h"
 #include "config.h"
+#include "improv_setup.h"
 #include <WiFi.h>
 #include <DNSServer.h>
 
@@ -186,8 +187,23 @@ void initWiFi() {
     Serial.println("WiFi connection failed, starting AP");
   }
 
-  // No credentials or connection failed — start AP
+  // No credentials or connection failed — bring AP up immediately so the
+  // captive portal is reachable without any delay. This matches the legacy
+  // behaviour exactly; web-flasher / Improv users get an additional path
+  // in parallel (see below) without anyone having to wait for a timeout.
   startAP();
+
+  // For genuinely fresh devices (no SSID stored at all), also open an
+  // Improv-Serial listening window in the background. Pumped from
+  // handleWiFi() while AP is up, so it costs nothing if no browser is
+  // listening; if the user did flash via the web flasher, ESP Web Tools
+  // probes Improv ~15s after the install and presents its "Configure
+  // WiFi" dialog. Skipped when the user just failed to connect with
+  // stored credentials - they need the AP to fix what they typed, not a
+  // browser dialog over a port that may not even be connected anymore.
+  if (strlen(wifiSSID) == 0) {
+    improvSetupBegin(IMPROV_SETUP_WINDOW_MS);
+  }
 }
 
 // Return the reconnect interval for the current attempt count.
@@ -204,6 +220,20 @@ static unsigned long reconnectInterval() {
 void handleWiFi() {
   if (apMode) {
     if (dnsServer) dnsServer->processNextRequest();
+
+    // Pump the Improv-Serial listener if its setup window is still open.
+    // On success the library has already saved credentials AND established
+    // STA via our custom connect callback; restart so the device boots
+    // cleanly into the configured WiFi without the dual-mode hangover.
+    if (improvSetupTick()) {
+      Serial.println("Improv: credentials received, restarting");
+      Serial.flush();
+      delay(200);  // let any pending serial response reach the browser
+      ESP.restart();
+    }
+    if (improvSetupExpired()) {
+      improvSetupEnd();
+    }
 
     // Periodically probe STA to recover without user interaction
     unsigned long now = millis();

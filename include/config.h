@@ -4,7 +4,7 @@
 // =============================================================================
 //  Firmware version
 // =============================================================================
-#define FW_VERSION          "v3.1"
+#define FW_VERSION          "v3.1.1"
 
 // Board variant — injected into the web UI for OTA asset filtering.
 // Normally set via build_flags in platformio.ini; this is a fallback.
@@ -78,6 +78,15 @@
 #define WIFI_STA_PROBE_INTERVAL   120000  // 2 min between STA probes while in AP mode
 #define WIFI_STA_PROBE_CHECK_MS    10000  // 10s after probe start before checking result
 #define WIFI_AP_FALLBACK_MS       900000  // 15 min in phase 3 before falling back to AP
+
+// Improv WiFi serial setup window on first boot (no stored credentials).
+// During this window the device listens for Improv commands from the web
+// flasher; on timeout it falls back to the AP captive portal.
+// 3 minutes is generous on purpose: ESP Web Tools needs ~15s to probe after
+// flash, then the user has to find their SSID, fetch the password from a
+// router sticker / password manager, and type it in. Anything shorter
+// punishes slow users with a "you missed the dialog" cliff.
+#define IMPROV_SETUP_WINDOW_MS    180000  // 3 min window for Improv setup at first boot
 
 // =============================================================================
 //  NVS

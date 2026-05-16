@@ -6,6 +6,8 @@ Connects to your printer via MQTT over TLS and displays a real-time dashboard wi
 
 Additional supported boards include CYD 240x320, Waveshare ESP32-S3-Zero, Waveshare 2" 240x320, Waveshare 1.54" 240x240, and ESP32-C3 DIY builds using the same 240x240 display as the ESP32-S3 version.
 
+> **One-click setup:** as of v3.1.1, you can flash your board and configure WiFi entirely from the browser at **[keralots.github.io/BambuHelper](https://keralots.github.io/BambuHelper/)** - no PlatformIO, no esptool, no captive portal hopping.
+
 ### Supported Printers
 
 | Connection Mode | Printers | How it connects |
@@ -144,6 +146,14 @@ You can change the buzzer GPIO later in the web interface under **Buzzer**. The 
 [![Assembly Video](https://img.youtube.com/vi/hsyamsU5UZE/maxresdefault.jpg)](https://youtu.be/hsyamsU5UZE)
 
 ## Flashing
+
+### Easy: BambuHelper Web Flasher (recommended for first-time setup)
+
+Open **[keralots.github.io/BambuHelper](https://keralots.github.io/BambuHelper/)** in Chrome or Edge on a desktop or laptop, pick your board, plug it in over USB, and click **Install**. That's it - no downloads, no offsets, no baudrate dialogs. After the flash finishes, the device screen shows the WiFi name and password to connect to so you can finish setup at `http://192.168.4.1`.
+
+Supports the 6 most common boards (ESP32-S3 SuperMini, Waveshare ESP32-S3-Zero, Waveshare ESP32-S3-Touch-LCD-2, Waveshare ESP32-S3-Touch-LCD-1.54, CYD / ESP32-2432S028, ESP32-C3 SuperMini). For TZT L1435-2.4 or the community-maintained SenseCAP Indicator, use the manual flow below.
+
+### Manual: Generic ESP Web Flasher
 
 1. Download the latest firmware from [Releases](../../releases). **If you are flashing a new device for the first time**, use the file ending with **-Full** (for example `BambuHelper-esp32s3-v3.1-Full.bin`). The regular `-ota.bin` file is for OTA updates on devices that already have BambuHelper installed.
 2. Open [ESP Web Flasher](https://espressif.github.io/esptool-js/) in Chrome or Edge
