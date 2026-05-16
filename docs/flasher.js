@@ -6,32 +6,26 @@ const BOARDS = {
   esp32s3: {
     chipFamily: 'ESP32-S3',
     label: 'ESP32-S3 SuperMini + 1.54" ST7789 (DIY)',
-    img: 'img/board-esp32s3.jpg',
   },
   esp32s3_zero: {
     chipFamily: 'ESP32-S3',
     label: 'Waveshare ESP32-S3-Zero + 1.54" ST7789 (DIY)',
-    img: 'img/board-esp32s3-zero.png',
   },
   ws_lcd_200: {
     chipFamily: 'ESP32-S3',
     label: 'Waveshare ESP32-S3-Touch-LCD-2 (240x320)',
-    img: 'img/board-ws-lcd-200.png',
   },
   ws_lcd_154: {
     chipFamily: 'ESP32-S3',
     label: 'Waveshare ESP32-S3-Touch-LCD-1.54 (240x240)',
-    img: 'img/board-ws-lcd-154.png',
   },
   cyd: {
     chipFamily: 'ESP32',
     label: 'CYD / ESP32-2432S028 (240x320)',
-    img: 'img/board-cyd.png',
   },
   esp32c3: {
     chipFamily: 'ESP32-C3',
     label: 'ESP32-C3 SuperMini + 1.54" ST7789 (DIY)',
-    img: 'img/board-esp32c3.png',
   },
 };
 
@@ -62,6 +56,12 @@ function buildManifest(boardId, version) {
     name: 'BambuHelper',
     version,
     new_install_prompt_erase: true,
+    // After flashing, wait up to 15s for the device to boot, then probe for
+    // Improv-Serial. The firmware exposes Improv only on first boot (no
+    // stored WiFi credentials), so this kicks in for fresh installs and
+    // lets ESP Web Tools show the "Configure WiFi" dialog in-browser -
+    // i.e. the "recommended" path in section 02 of index.html.
+    new_install_improv_wait_time: 15,
     builds: [{
       chipFamily: board.chipFamily,
       parts: [{ path: binUrl, offset: 0 }],
@@ -93,17 +93,10 @@ function populateBoardSelect() {
   sel.value = DEFAULT_BOARD;
 }
 
-function renderBoardPreview(boardId) {
-  const wrap = document.getElementById('board-preview');
+function renderSpecs(boardId) {
   const info = BOARDS[boardId];
-  wrap.innerHTML = '';
-  const img = document.createElement('img');
-  img.src = info.img;
-  img.alt = info.label;
-  img.loading = 'lazy';
-  // If a preview image is missing, hide the broken-image icon silently.
-  img.addEventListener('error', () => { img.style.display = 'none'; });
-  wrap.appendChild(img);
+  document.getElementById('spec-chip').textContent = info.chipFamily;
+  document.getElementById('spec-id').textContent = boardId;
 }
 
 function renderInstallButton(boardId, version) {
@@ -136,12 +129,15 @@ function showStatus(message, kind) {
 }
 
 function showVersion(version) {
-  document.getElementById('version-line').textContent =
-    `Will flash: ${version}`;
+  document.getElementById('spec-version').textContent = version;
+  const rail = document.getElementById('rail-version');
+  if (rail) rail.textContent = version;
 }
 
 function showVersionError(err) {
-  document.getElementById('version-line').textContent = '';
+  document.getElementById('spec-version').textContent = 'unavailable';
+  const rail = document.getElementById('rail-version');
+  if (rail) rail.textContent = 'unavailable';
   showStatus(
     `Could not load firmware version (${err.message}). The site may be mid-deploy - try again in a minute.`,
     'error',
@@ -149,9 +145,19 @@ function showVersionError(err) {
   document.getElementById('install-slot').innerHTML = '';
 }
 
+function checkBrowserSupport() {
+  // Show the desktop-only callout for browsers without Web Serial.
+  // Done here (not just via the button's <slot="unsupported">) so mobile users
+  // see a clear, intentional message before scrolling through the page.
+  if (!('serial' in navigator)) {
+    document.getElementById('browser-callout').classList.add('show');
+  }
+}
+
 async function init() {
+  checkBrowserSupport();
   populateBoardSelect();
-  renderBoardPreview(DEFAULT_BOARD);
+  renderSpecs(DEFAULT_BOARD);
 
   try {
     _version = await loadVersion();
@@ -165,7 +171,7 @@ async function init() {
 
   document.getElementById('board-select').addEventListener('change', (e) => {
     const boardId = e.target.value;
-    renderBoardPreview(boardId);
+    renderSpecs(boardId);
     renderInstallButton(boardId, _version);
   });
 }
