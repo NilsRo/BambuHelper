@@ -3009,20 +3009,46 @@ static void drawFinished() {
                     (finishKwh != prevFinKwh);
   if (forceRedraw || kwhChanged) {
     const int16_t kwhY = finKwhY;
-    tft.fillRect(0, kwhY - 9, scrW, 18, CLR_BG);
+    // Two-line mode (kWh on first row, cost on second) needs vertical room.
+    // 240x320 landscape: gap below kWh band is ~29px (bot bar at 216).
+    // 240x320 portrait without AMS: ~63px gap (bot bar at 290).
+    // 240x320 portrait WITH AMS: AMS strip starts ~10px below — single line only.
+    // 240x240: only ~11px to bottom bar — single line only.
+#if defined(DISPLAY_240x320)
+    const bool twoLineCost = (finishTariff > 0.0f) &&
+                             (land || !(s.ams.present && s.ams.unitCount > 0));
+#else
+    const bool twoLineCost = false;
+#endif
+    const int16_t bandH = twoLineCost ? 34 : 18;
+    tft.fillRect(0, kwhY - 9, scrW, bandH, CLR_BG);
     if (finishKwh >= 0.0f) {
-      drawIcon16(tft, cx - 32, kwhY - 8, icon_lightning, CLR_YELLOW);
-      char kwhBuf[32];
-      if (finishTariff > 0.0f) {
-        snprintf(kwhBuf, sizeof(kwhBuf), "%.3f kWh  (%.2f %s)",
-                 finishKwh, finishKwh * finishTariff, tasmotaCurrencySymbol());
-      } else {
-        snprintf(kwhBuf, sizeof(kwhBuf), "%.3f kWh", finishKwh);
-      }
-      tft.setTextDatum(ML_DATUM);
       setFont(tft, FONT_BODY);
       tft.setTextColor(CLR_TEXT_DIM, CLR_BG);
-      tft.drawString(kwhBuf, cx - 14, kwhY);
+
+      char kwhBuf[24];
+      if (twoLineCost || finishTariff <= 0.0f) {
+        snprintf(kwhBuf, sizeof(kwhBuf), "%.3f kWh", finishKwh);
+      } else {
+        snprintf(kwhBuf, sizeof(kwhBuf), "%.3f kWh  (%.2f %s)",
+                 finishKwh, finishKwh * finishTariff, tasmotaCurrencySymbol());
+      }
+
+      // Center icon + text as a group so longer strings don't drift right.
+      const int16_t kwhTextW = tft.textWidth(kwhBuf);
+      const int16_t groupW   = 16 + 4 + kwhTextW;
+      const int16_t iconX    = cx - groupW / 2;
+      drawIcon16(tft, iconX, kwhY - 8, icon_lightning, CLR_YELLOW);
+      tft.setTextDatum(ML_DATUM);
+      tft.drawString(kwhBuf, iconX + 16 + 4, kwhY);
+
+      if (twoLineCost) {
+        char costBuf[24];
+        snprintf(costBuf, sizeof(costBuf), "%.2f %s",
+                 finishKwh * finishTariff, tasmotaCurrencySymbol());
+        tft.setTextDatum(MC_DATUM);
+        tft.drawString(costBuf, cx, kwhY + 16);
+      }
     }
   }
   prevFinKwh = finishKwh;
