@@ -252,7 +252,7 @@ The device reboots automatically once the update is written; the web page reload
 
 ### Getting a Cloud Token
 
-To use cloud mode, you need an access token from your Bambu Lab account. There are two ways to get it:
+To use cloud mode, you need an access token from your Bambu Lab account. The easiest way is to copy it from your browser cookies on https://bambulab.com (you must be logged in).
 
 **Using browser DevTools (Chrome / Edge):**
 1. Open https://bambulab.com and log in to your account
@@ -279,16 +279,13 @@ To use cloud mode, you need an access token from your Bambu Lab account. There a
 4. Find and copy the `token` value
 5. Paste it into BambuHelper's "Access Token" field
 
-**Using the Python helper script (recommended):**
-```bash
-pip install curl_cffi
-python tools/get_token.py
-```
-The script will prompt for your email, password, and 2FA code, then print the token. Copy and paste it into BambuHelper's web interface.
-
 > **Note:** The token is valid for approximately 3 months. When it expires, the ESP32 will fail to connect - simply repeat the process above to get a fresh token and paste it in the web interface. Make sure to select the correct **Server Region** (US/EU/CN) to match your Bambu account's region.
 
-> **Token expires very quickly (after one session, on next reboot, etc.)?** Use the Python helper script (`tools/get_token.py`) instead of copying the cookie from the browser. Some accounts produce a browser cookie that gets invalidated unexpectedly soon after extraction; a token obtained via the script tends to be more stable.
+**Optional: Companion Tool for one-click setup**
+
+If you'd rather skip the copy-paste flow entirely, the [Companion Tool](tools/DIAGNOSTICS-HOWTO.md) (`tools/BambuHelper-CompanionTool.exe` on Windows, `python tools/bambu_diag.py` on Mac/Linux) logs into your Bambu account, fetches your printer list, and pushes the token + serial straight to BambuHelper over your LAN - no copying, no pasting. Pick "Configure BambuHelper device" from its menu.
+
+> **Browser cookie token expires very quickly (after one session, on next reboot, etc.)?** Try the Companion Tool instead - tokens obtained that way tend to be more stable than browser cookies that get invalidated unexpectedly soon after extraction.
 
 ### Custom Smooth Fonts
 

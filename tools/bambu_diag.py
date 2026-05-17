@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """
-BambuHelper MQTT Diagnostic (Easy Mode)
+BambuHelper Companion Tool
 
-One-stop interactive diagnostic tool: no file editing, no copy-pasting serials.
-Asks LAN or Cloud, handles login + 2FA, lets you pick a printer from a menu,
-then runs the full TLS/MQTT/AMS diagnostic and saves a pushall dump.
+Two modes in one interactive tool:
+  1. Run diagnostic (test connection + dump status for support)
+  2. Configure BambuHelper device (one-click cloud/LAN setup over LAN)
+
+No file editing, no copy-pasting serials. Handles login + 2FA, fetches your
+printer list automatically, and either runs the full diagnostic or pushes
+the config straight to a BambuHelper device on your network.
 
 Usage:
     python bambu_diag.py
@@ -14,6 +18,7 @@ Requirements:
     pip install curl_cffi              # only for Cloud mode (Cloudflare bypass)
 """
 
+import atexit
 import sys
 import ssl
 import socket
@@ -21,6 +26,7 @@ import time
 import json
 import base64
 import getpass
+import urllib.parse
 import urllib.request
 
 try:
@@ -31,7 +37,7 @@ except ImportError:
     sys.exit(1)
 
 # ────────────────────────────────────────────────────────────────────────────
-#  Cloud login (lifted from get_token.py)
+#  Cloud login (email + password + optional 2FA via Bambu's login API)
 # ────────────────────────────────────────────────────────────────────────────
 API_BASE_US = "https://api.bambulab.com"
 API_BASE_CN = "https://api.bambulab.cn"
@@ -284,10 +290,11 @@ def prompt_cloud():
         "password": token,
         "serial": serial,
         "region": region,
+        "name": dev.get("name", "") or "",
     }
 
 # ────────────────────────────────────────────────────────────────────────────
-#  Diagnostic (mirrors mqtt_test.py output)
+#  Diagnostic (TCP / TLS / MQTT auth / pushall capture)
 # ────────────────────────────────────────────────────────────────────────────
 PORT = 8883
 
@@ -568,9 +575,137 @@ def print_summary():
     print(f"\n  Full pushall saved to: pushall_dump.json")
     print(f"  Share this summary (redact serial/code if needed) for support.")
 
-def main():
-    section("Bambu Lab MQTT Diagnostic (Easy Mode)")
-    print("  No config editing required - everything is interactive.")
+def push_config_to_device(bh_ip, form):
+    """POST form-urlencoded config to BambuHelper /save/printer endpoint."""
+    body = urllib.parse.urlencode(form).encode("utf-8")
+    url = f"http://{bh_ip}/save/printer"
+    req = urllib.request.Request(
+        url, data=body, method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return resp.status, resp.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode("utf-8", errors="replace") if e.fp else ""
+    except Exception as e:
+        return -1, str(e)
+
+def prompt_push_config():
+    """Setup mode: gather config (cloud or LAN) and POST it to a BambuHelper device."""
+    section("Configure BambuHelper Device")
+    print("  This will send your printer config to a BambuHelper on your network.")
+    print("  Find the BambuHelper IP on the device screen (shown after WiFi setup).")
+    print()
+
+    mode = ask_choice("Printer connection type:", [
+        ("Cloud (login with Bambu account)",                       "cloud"),
+        ("LAN (printer on local network, LAN Only Mode enabled)",  "lan"),
+    ])
+
+    if mode == "lan":
+        data = prompt_lan()
+        # prompt_lan returns: mode, broker (=ip), username (=bblp), password (=code), serial
+        printer_name = ""
+    else:
+        data = prompt_cloud()
+        printer_name = data.get("name", "")
+
+    print("\n--- BambuHelper Device ---")
+    bh_ip = ask("BambuHelper IP (shown on its screen)")
+    if not bh_ip:
+        print("ERROR: BambuHelper IP required.")
+        sys.exit(1)
+
+    slot_choice = ask_choice("Configure which slot on the BambuHelper?", [
+        ("Printer 1 (default)", 0),
+        ("Printer 2 (only if dual-printer mode is enabled)", 1),
+    ])
+
+    suggested = printer_name or ("Bambu " + data["serial"][:4])
+    friendly = ask("Friendly name for this printer", default=suggested)
+
+    # Field names must match the handler in src/web_server.cpp::handleSavePrinter
+    # (connmode/pname, region as "us"/"eu"/"cn") - the web UI's savePrinter() JS
+    # is the source of truth for this shape.
+    if mode == "lan":
+        form = {
+            "slot": str(slot_choice),
+            "connmode": "lan",
+            "pname": friendly,
+            "serial": data["serial"],
+            "ip": data["broker"],
+            "code": data["password"],
+        }
+    else:
+        region_str = "cn" if data.get("region") == "cn" else "us"
+        form = {
+            "slot": str(slot_choice),
+            "connmode": "cloud_all",
+            "pname": friendly,
+            "serial": data["serial"],
+            "token": data["password"],
+            "region": region_str,
+        }
+
+    section("Sending config to BambuHelper")
+    print(f"  Target:  http://{bh_ip}/save/printer")
+    print(f"  Slot:    {slot_choice + 1}")
+    print(f"  Mode:    {form['connmode']}")
+    print(f"  Serial:  {form['serial']}")
+    print(f"  Name:    {friendly}")
+    print()
+    print("  POSTing...")
+
+    status, body = push_config_to_device(bh_ip, form)
+
+    if status == -1:
+        print(f"\n  [FAIL] Could not reach BambuHelper at {bh_ip}: {body}")
+        print(f"  --> Check IP on device screen, same WiFi, no firewall blocking.")
+        sys.exit(1)
+
+    print(f"  HTTP {status}")
+    print(f"  Response: {body[:400]}")
+
+    parsed = None
+    try:
+        parsed = json.loads(body)
+    except json.JSONDecodeError:
+        pass
+
+    if parsed is None:
+        if status == 200:
+            print("\n  [OK] Config sent (no JSON response to parse).")
+        else:
+            print(f"\n  [FAIL] HTTP {status} - device did not return JSON.")
+            sys.exit(1)
+        return
+
+    resp_status = parsed.get("status", "")
+    warning = parsed.get("warning", "").strip()
+    message = parsed.get("message", "").strip()
+
+    if resp_status == "ok" and not warning:
+        print("\n  [SUCCESS] Config sent. Check the BambuHelper screen - it should")
+        print("            start connecting to your printer within a few seconds.")
+    elif resp_status == "ok" and warning:
+        # Device saved but flagged missing/invalid fields - treat as partial.
+        print(f"\n  [WARNING] Device accepted the request but reported issues:")
+        print(f"     {warning}")
+        print(f"\n  This usually means a required field was missing or rejected.")
+        print(f"  The config was still written - check the BambuHelper web UI to")
+        print(f"  see what landed and fix any gaps there.")
+        sys.exit(2)
+    else:
+        print(f"\n  [FAIL] Device rejected the config.")
+        if message:
+            print(f"     {message}")
+        sys.exit(1)
+
+def run_diagnostic():
+    """Diagnostic mode: gather config and run the full TLS/MQTT/AMS check."""
+    section("Bambu Lab MQTT Diagnostic")
+    print("  Tests the full connection chain and saves a pushall dump.")
     print()
 
     mode = ask_choice("Connection mode:", [
@@ -594,6 +729,31 @@ def main():
     check_tls()
     check_mqtt()
     print_summary()
+
+def main():
+    section("BambuHelper Companion Tool")
+    print("  Set up your BambuHelper device, or diagnose printer connection issues.")
+    print()
+
+    action = ask_choice("What would you like to do?", [
+        ("Configure BambuHelper device (one-click setup)",  "setup"),
+        ("Run printer diagnostic (test connection + dump)", "diag"),
+    ])
+
+    if action == "setup":
+        prompt_push_config()
+    else:
+        run_diagnostic()
+
+# Keep the console window open after a double-click run finishes (PyInstaller
+# sets sys.frozen). Runs on every exit path including sys.exit() and crashes.
+def _pause_on_exit():
+    if getattr(sys, "frozen", False):
+        try:
+            input("\nPress Enter to exit...")
+        except (EOFError, KeyboardInterrupt):
+            pass
+atexit.register(_pause_on_exit)
 
 if __name__ == "__main__":
     try:
