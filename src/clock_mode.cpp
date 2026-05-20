@@ -6,23 +6,80 @@
 #include "layout.h"
 #include <time.h>
 
-// Font 7 digit dimensions (same as pong clock)
-#define CLK_DIGIT_W   LY_ARK_DIGIT_W   // 32
-#define CLK_DIGIT_H   LY_ARK_DIGIT_H   // 48
-#define CLK_COLON_W   LY_ARK_COLON_W   // 12
+// Base (1x) digit metrics for the simple clock. Layout-agnostic on purpose:
+// LY_ARK_* values in some layout profiles (e.g. layout_480x480.h) are already
+// pre-scaled for the pong clock, so reusing them here would double-scale on
+// those screens.
+static constexpr int CLK_BASE_W     = 32;
+static constexpr int CLK_BASE_H     = 48;
+static constexpr int CLK_BASE_COLON = 12;
 
-#define CLK_TIME_W    (4 * CLK_DIGIT_W + CLK_COLON_W)
-// Center horizontally on the active canvas — matters for 240x320 landscape
-// where tft.width() returns 320, not LY_W (240).
 static inline int clkScrW() { return (int)tft.width(); }
-static inline int clkTimeX() { return (clkScrW() - CLK_TIME_W) / 2; }
-#define CLK_TIME_X    (clkTimeX())
+static inline int clkScrH() { return (int)tft.height(); }
 
-static int prevMinute = -1;
+static constexpr int DATE_FONT_H   = 16;   // FONT_BODY at 1x
+static constexpr int DATE_GAP      = 14;   // gap between time digits and date
+
+static int clkDigitX(int i, int timeX0, int digitW, int colonW) {
+  if (i < 2)  return timeX0 + i * digitW;
+  if (i == 2) return timeX0 + 2 * digitW;                       // colon slot
+  return timeX0 + 2 * digitW + colonW + (i - 3) * digitW;
+}
+
+// Map the 1..3 size selector to a scale factor.
+static float sizeIndexToScale(int idx) {
+  switch (idx) {
+    case 3: return 2.0f;   // Large
+    case 2: return 1.5f;   // Medium
+    default: return 1.0f;  // Normal
+  }
+}
+
+static int autoSizeIndex() {
+  if (SCREEN_W >= 480) return 3;   // Large
+  if (SCREEN_W >= 320) return 2;   // Medium
+  return 1;                        // Normal
+}
+
+// Resolve the user-selected time size, clamping down if the resulting block
+// (digits + colon + AM/PM in 12h mode) wouldn't fit horizontally.
+// Returns a scale factor (1.0 / 1.5 / 2.0).
+static float getEffectiveClockScale() {
+  uint8_t requested = dispSettings.clockTimeSize;
+  if (requested > 3) requested = 0;                              // tolerate junk
+  int wanted = requested ? (int)requested : autoSizeIndex();
+
+  int suffixW = 0;
+  if (!netSettings.use24h) {
+    setFont(tft, FONT_BODY);
+    tft.setTextSize(1);
+    int amW = tft.textWidth("AM");
+    int pmW = tft.textWidth("PM");
+    suffixW = (amW > pmW ? amW : pmW) + 6;                       // gap + label
+  }
+  auto fits = [&](int idx) {
+    float s = sizeIndexToScale(idx);
+    int blockW = (int)(4 * CLK_BASE_W * s) + (int)(CLK_BASE_COLON * s);
+    return blockW + suffixW <= clkScrW() - 4;
+  };
+  while (wanted > 1 && !fits(wanted)) wanted--;
+  return sizeIndexToScale(wanted);
+}
+
+// --- Per-tick state cache ---
+static int  prevMinute = -1;
 static char prevDigits[5] = {0, 0, 0, 0, 0};
 static bool prevColon = false;
 static char prevDateBuf[28] = "";
 static char prevAmPm[3] = "";
+static int  prevAmpmX = -1;
+static int  prevAmpmY = -1;
+static int  prevSuffixTextW = 0;
+static int  prevDateY = -1;
+static float prevScale = -1.0f;
+static int   prevTimeX0 = -1;
+static bool  prevUse24h = true;
+static bool  prevHideDate = false;
 
 void resetClock() {
   prevMinute = -1;
@@ -30,13 +87,14 @@ void resetClock() {
   prevColon = false;
   prevDateBuf[0] = '\0';
   prevAmPm[0] = '\0';
-}
-
-// X position for each of the 5 slots: d0 d1 : d3 d4
-static int clkDigitX(int i) {
-  if (i < 2) return CLK_TIME_X + i * CLK_DIGIT_W;
-  if (i == 2) return CLK_TIME_X + 2 * CLK_DIGIT_W;  // colon
-  return CLK_TIME_X + 2 * CLK_DIGIT_W + CLK_COLON_W + (i - 3) * CLK_DIGIT_W;
+  prevAmpmX = -1;
+  prevAmpmY = -1;
+  prevSuffixTextW = 0;
+  prevDateY = -1;
+  prevScale = -1.0f;
+  prevTimeX0 = -1;
+  prevUse24h = true;
+  prevHideDate = false;
 }
 
 void drawClock() {
@@ -47,24 +105,69 @@ void drawClock() {
     localtime_r(&t, &now);
   }
 
-  uint16_t bg = dispSettings.bgColor;
-  uint16_t timeClr = dispSettings.clockTimeColor;
-  uint16_t dateClr = dispSettings.clockDateColor;
+  const uint16_t bg       = dispSettings.bgColor;
+  const uint16_t timeClr  = dispSettings.clockTimeColor;
+  const uint16_t dateClr  = dispSettings.clockDateColor;
 
-  // Text size: scale up on high-res displays (480x480 uses 2x layout constants)
-  const int clkTextSize = (SCREEN_W >= 480) ? 2 : 1;
+  const float scale  = getEffectiveClockScale();
+  const int digitW = (int)(CLK_BASE_W * scale);
+  const int digitH = (int)(CLK_BASE_H * scale);
+  const int colonW = (int)(CLK_BASE_COLON * scale);
+  const int timeBlockW = 4 * digitW + colonW;
 
-  // --- Colon blink (every call, ~250ms) ---
-  bool colonOn = (millis() % 1000) < 500;
+  // AM/PM suffix width (only meaningful in 12h mode).
+  int suffixTextW = 0;
+  int suffixW = 0;
+  if (!netSettings.use24h) {
+    setFont(tft, FONT_BODY);
+    tft.setTextSize(1);
+    int amW = tft.textWidth("AM");
+    int pmW = tft.textWidth("PM");
+    suffixTextW = (amW > pmW ? amW : pmW);
+    suffixW = suffixTextW + 6;
+  }
+  const int totalW  = timeBlockW + suffixW;
+  const int sw      = clkScrW();
+  const int sh      = clkScrH();
+  const int timeX0  = (sw - totalW) / 2;
+  // Vertically center the whole clock block on the current canvas. With the
+  // layout's fixed LY_CLK_TIME_Y the time sat above mid-screen in portrait
+  // and below it in landscape (the 240x320 layout's value was chosen for
+  // portrait). Compute timeYTop from the actual screen height instead.
+  const int contentH = digitH +
+                       (dispSettings.hideClockDate ? 0 : (DATE_GAP + DATE_FONT_H));
+  const int timeYTop = (sh - contentH) / 2;
+  const int ampmX   = timeX0 + timeBlockW + 6;
+  const int ampmFontH = DATE_FONT_H;
+  const int ampmY   = timeYTop + digitH - ampmFontH;             // bottom-align with digits
+
+  // Force a full redraw whenever the horizontal layout shifts (scale change,
+  // 12h <-> 24h centering shift, or hide-date toggle).
+  if (scale != prevScale || timeX0 != prevTimeX0 ||
+      netSettings.use24h != prevUse24h ||
+      dispSettings.hideClockDate != prevHideDate) {
+    prevMinute = -1;
+    memset(prevDigits, 0, sizeof(prevDigits));
+    prevColon = false;
+    prevDateBuf[0] = '\0';
+    prevAmPm[0] = '\0';
+    tft.fillRect(0, LY_CLK_CLEAR_Y, sw, LY_CLK_CLEAR_H, bg);
+    prevScale = scale;
+    prevTimeX0 = timeX0;
+    prevUse24h = netSettings.use24h;
+    prevHideDate = dispSettings.hideClockDate;
+  }
+
+  // --- Colon blink (~250 ms cadence; every call) ---
+  const bool colonOn = (millis() % 1000) < 500;
   if (colonOn != prevColon) {
-    int cx = clkDigitX(2);
-    int cy = LY_CLK_TIME_Y - CLK_DIGIT_H / 2;
-    tft.fillRect(cx, cy, CLK_COLON_W, CLK_DIGIT_H, bg);
+    const int cx = clkDigitX(2, timeX0, digitW, colonW);
+    tft.fillRect(cx, timeYTop, colonW, digitH, bg);
     if (colonOn) {
       setFont(tft, FONT_7SEG);
-      tft.setTextSize(clkTextSize);
+      tft.setTextSize(scale);
       tft.setTextColor(timeClr, bg);
-      tft.drawChar(':', cx, cy, 7);
+      tft.drawChar(':', cx, timeYTop, 7);
     }
     prevColon = colonOn;
   }
@@ -73,7 +176,7 @@ void drawClock() {
   if (now.tm_min == prevMinute) return;
   prevMinute = now.tm_min;
 
-  // Build digit array
+  // Build digit array.
   char digits[5];
   if (netSettings.use24h) {
     digits[0] = '0' + (now.tm_hour / 10);
@@ -88,82 +191,104 @@ void drawClock() {
   digits[3] = '0' + (now.tm_min / 10);
   digits[4] = '0' + (now.tm_min % 10);
 
-  // Draw only changed digits
+  // Draw only changed digits.
   setFont(tft, FONT_7SEG);
-  tft.setTextSize(clkTextSize);
+  tft.setTextSize(scale);
   tft.setTextColor(timeClr, bg);
 
-  int dy = LY_CLK_TIME_Y - CLK_DIGIT_H / 2;  // top-left Y (MC_DATUM centers at LY_CLK_TIME_Y)
-
   for (int i = 0; i < 5; i++) {
-    if (i == 2) continue;  // colon handled above
+    if (i == 2) continue;                                        // colon handled above
     if (digits[i] == prevDigits[i]) continue;
-
-    int x = clkDigitX(i);
-    int clearW = CLK_DIGIT_W + 2;
-    tft.fillRect(x, dy, clearW, CLK_DIGIT_H, bg);
-    tft.drawChar(digits[i], x, dy, 7);
+    const int x = clkDigitX(i, timeX0, digitW, colonW);
+    tft.fillRect(x, timeYTop, digitW + 2, digitH, bg);
+    tft.drawChar(digits[i], x, timeYTop, 7);
     prevDigits[i] = digits[i];
   }
 
-  // Force colon redraw after full redraw (first draw or resetClock)
+  // Force colon redraw on first paint after a full clear.
   if (prevDigits[2] == 0) {
-    prevColon = !colonOn;  // will be redrawn on next call
+    prevColon = !colonOn;
     prevDigits[2] = ':';
   }
 
-  // --- AM/PM (12h mode) / clear stale AM/PM when switching to 24h ---
-  const int ampmFontH = clkTextSize * 12;  // approx height of Font 4 at scaled size
+  // --- AM/PM inline next to the time, or clear when switching to 24h ---
   if (!netSettings.use24h) {
     const char* ampm = now.tm_hour < 12 ? "AM" : "PM";
-    if (strcmp(ampm, prevAmPm) != 0) {
-      tft.setTextDatum(MC_DATUM);
-      setFont(tft, FONT_LARGE);
-      tft.setTextSize(clkTextSize);
+    if (strcmp(ampm, prevAmPm) != 0 ||
+        ampmX != prevAmpmX || ampmY != prevAmpmY) {
+      setFont(tft, FONT_BODY);
+      tft.setTextSize(1);
       tft.setTextColor(dateClr, bg);
-      int ampmW = tft.textWidth("PM");
-      const int sw = clkScrW();
-      tft.fillRect(sw / 2 - ampmW / 2 - 2, LY_CLK_AMPM_Y - ampmFontH, ampmW + 4, ampmFontH * 2, bg);
-      tft.drawString(ampm, sw / 2, LY_CLK_AMPM_Y);
+      tft.setTextDatum(TL_DATUM);
+      // Clear previous AM/PM at its old position if we moved it, then draw new.
+      if (prevAmpmX >= 0 && (prevAmpmX != ampmX || prevAmpmY != ampmY) && prevAmPm[0]) {
+        tft.fillRect(prevAmpmX, prevAmpmY - 1,
+                     prevSuffixTextW + 2, ampmFontH + 2, bg);
+      }
+      tft.fillRect(ampmX, ampmY - 1, suffixTextW + 2, ampmFontH + 2, bg);
+      tft.drawString(ampm, ampmX, ampmY);
       strlcpy(prevAmPm, ampm, sizeof(prevAmPm));
+      prevAmpmX = ampmX;
+      prevAmpmY = ampmY;
+      prevSuffixTextW = suffixTextW;
     }
   } else if (prevAmPm[0] != '\0') {
-    tft.setTextDatum(MC_DATUM);
-    setFont(tft, FONT_LARGE);
-    tft.setTextSize(clkTextSize);
-    int ampmW = tft.textWidth("PM");
-    const int sw = clkScrW();
-    tft.fillRect(sw / 2 - ampmW / 2 - 2, LY_CLK_AMPM_Y - ampmFontH, ampmW + 4, ampmFontH * 2, bg);
+    tft.fillRect(prevAmpmX, prevAmpmY - 1,
+                 prevSuffixTextW + 2, ampmFontH + 2, bg);
     prevAmPm[0] = '\0';
+    prevAmpmX = -1;
+    prevAmpmY = -1;
+    prevSuffixTextW = 0;
   }
 
-  // --- Date ---
+  // --- Date (or hide-date wipe) ---
+  if (dispSettings.hideClockDate) {
+    if (prevDateBuf[0] && prevDateY >= 0) {
+      const int dateClearH = 22;
+      tft.fillRect(0, prevDateY - dateClearH / 2, sw, dateClearH, bg);
+      prevDateBuf[0] = '\0';
+    }
+    return;
+  }
+
   const char* days[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
   const char* months[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
   char dateBuf[28];
-  int day = now.tm_mday, mon = now.tm_mon + 1, year = now.tm_year + 1900;
+  const int day = now.tm_mday;
+  const int mon = now.tm_mon + 1;
+  const int year = now.tm_year + 1900;
   switch (netSettings.dateFormat) {
-    case 1:  snprintf(dateBuf, sizeof(dateBuf), "%s  %02d-%02d-%04d", days[now.tm_wday], day, mon, year); break;
-    case 2:  snprintf(dateBuf, sizeof(dateBuf), "%s  %02d/%02d/%04d", days[now.tm_wday], mon, day, year); break;
-    case 3:  snprintf(dateBuf, sizeof(dateBuf), "%s  %04d-%02d-%02d", days[now.tm_wday], year, mon, day); break;
-    case 4:  snprintf(dateBuf, sizeof(dateBuf), "%s  %d %s %04d", days[now.tm_wday], day, months[now.tm_mon], year); break;
-    case 5:  snprintf(dateBuf, sizeof(dateBuf), "%s  %s %d, %04d", days[now.tm_wday], months[now.tm_mon], day, year); break;
-    default: snprintf(dateBuf, sizeof(dateBuf), "%s  %02d.%02d.%04d", days[now.tm_wday], day, mon, year); break;
+    case 1:  snprintf(dateBuf, sizeof(dateBuf), "%s %02d-%02d-%04d", days[now.tm_wday], day, mon, year); break;
+    case 2:  snprintf(dateBuf, sizeof(dateBuf), "%s %02d/%02d/%04d", days[now.tm_wday], mon, day, year); break;
+    case 3:  snprintf(dateBuf, sizeof(dateBuf), "%s %04d-%02d-%02d", days[now.tm_wday], year, mon, day); break;
+    case 4:  snprintf(dateBuf, sizeof(dateBuf), "%s %d %s %04d", days[now.tm_wday], day, months[now.tm_mon], year); break;
+    case 5:  snprintf(dateBuf, sizeof(dateBuf), "%s %s %d, %04d", days[now.tm_wday], months[now.tm_mon], day, year); break;
+    default: snprintf(dateBuf, sizeof(dateBuf), "%s %02d.%02d.%04d", days[now.tm_wday], day, mon, year); break;
   }
 
-  if (strcmp(dateBuf, prevDateBuf) != 0) {
+  // Date Y: derived from the centered time block. MC_DATUM expects the
+  // vertical center of the text — add half the font height to the gap-relative
+  // top so the baseline sits cleanly below the digits.
+  const int dateY = timeYTop + digitH + DATE_GAP + DATE_FONT_H / 2;
+
+  if (strcmp(dateBuf, prevDateBuf) != 0 || dateY != prevDateY) {
+    setFont(tft, FONT_BODY);
+    tft.setTextSize(1);
     tft.setTextDatum(MC_DATUM);
-    setFont(tft, FONT_LARGE);
-    tft.setTextSize(clkTextSize);
     tft.setTextColor(dateClr, bg);
-    // Clear previous date, draw new
-    const int dateFontH = clkTextSize * 12;
-    int dateW = tft.textWidth(prevDateBuf[0] ? prevDateBuf : dateBuf);
-    int newW = tft.textWidth(dateBuf);
-    int clearW = (dateW > newW) ? dateW : newW;
-    const int sw = clkScrW();
-    tft.fillRect(sw / 2 - clearW / 2 - 2, LY_CLK_DATE_Y - dateFontH, clearW + 4, dateFontH * 2, bg);
-    tft.drawString(dateBuf, sw / 2, LY_CLK_DATE_Y);
+    const int dateClearH = 22;
+    const int dateW = tft.textWidth(prevDateBuf[0] ? prevDateBuf : dateBuf);
+    const int newW = tft.textWidth(dateBuf);
+    const int clearW = (dateW > newW) ? dateW : newW;
+    // If Y moved, also wipe the previous date strip first.
+    if (prevDateY >= 0 && prevDateY != dateY && prevDateBuf[0]) {
+      tft.fillRect(0, prevDateY - dateClearH / 2, sw, dateClearH, bg);
+    }
+    tft.fillRect(sw / 2 - clearW / 2 - 2,
+                 dateY - dateClearH / 2,
+                 clearW + 4, dateClearH, bg);
+    tft.drawString(dateBuf, sw / 2, dateY);
     strlcpy(prevDateBuf, dateBuf, sizeof(prevDateBuf));
+    prevDateY = dateY;
   }
 }

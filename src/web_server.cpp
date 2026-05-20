@@ -432,6 +432,17 @@ R"rawliteral(
           <label>Time color</label><input type="color" id="clk_time" value="%CLK_TIME%">
           <label>Date color</label><input type="color" id="clk_date" value="%CLK_DATE%">
         </div>
+        <label for="clk_size" style="margin-top:10px">Time size</label>
+        <select id="clk_size">
+          <option value="0" %CLKSZ0%>Auto (default)</option>
+          <option value="1" %CLKSZ1%>Normal</option>
+          <option value="2" %CLKSZ2%>Medium</option>
+          <option value="3" %CLKSZ3%>Large (falls back if screen too narrow)</option>
+        </select>
+        <div class="check-row" style="margin-top:8px">
+          <input type="checkbox" id="clk_hidedate" value="1" %CLK_HIDEDATE%>
+          <label for="clk_hidedate">Hide date (time only)</label>
+        </div>
       </div>
 
       <details class="subsection-toggle">
@@ -1355,6 +1366,8 @@ function applyDisplay(){
   p.append('clr_track',document.getElementById('clr_track').value);
   p.append('clk_time',document.getElementById('clk_time').value);
   p.append('clk_date',document.getElementById('clk_date').value);
+  p.append('clk_size',document.getElementById('clk_size').value);
+  if(document.getElementById('clk_hidedate').checked) p.append('clk_hidedate','1');
   var g=['prg','noz','bed','pfn','afn','cfn','cht','hbk'];
   for(var i=0;i<g.length;i++){
     p.append(g[i]+'_a',document.getElementById(g[i]+'_a').value);
@@ -1802,6 +1815,12 @@ static bool resolvePlaceholder(const char* name, String& out) {
     out = netSettings.dateFormat == (name[7] - '0') ? "selected" : "";
     return true;
   }
+  // CLKSZ0..CLKSZ3
+  if (strncmp(name, "CLKSZ", 5) == 0 && name[5] >= '0' && name[5] <= '3' && name[6] == '\0') {
+    out = dispSettings.clockTimeSize == (uint8_t)(name[5] - '0') ? "selected" : "";
+    return true;
+  }
+  if (strcmp(name, "CLK_HIDEDATE") == 0) { out = dispSettings.hideClockDate ? "checked" : ""; return true; }
 
   // --- Display rotation ---
   if (strncmp(name, "ROT", 3) == 0 && name[3] >= '0' && name[3] <= '3' && name[4] == '\0') {
@@ -2170,6 +2189,11 @@ static void readDisplayFromForm() {
   if (server.hasArg("clr_track")) dispSettings.trackColor = htmlToRgb565(server.arg("clr_track").c_str());
   if (server.hasArg("clk_time"))  dispSettings.clockTimeColor = htmlToRgb565(server.arg("clk_time").c_str());
   if (server.hasArg("clk_date"))  dispSettings.clockDateColor = htmlToRgb565(server.arg("clk_date").c_str());
+  if (server.hasArg("clk_size")) {
+    int s = server.arg("clk_size").toInt();
+    if (s >= 0 && s <= 3) dispSettings.clockTimeSize = (uint8_t)s;
+  }
+  dispSettings.hideClockDate = server.hasArg("clk_hidedate");
 
   readGaugeColorsFromForm("prg", dispSettings.progress);
   readGaugeColorsFromForm("noz", dispSettings.nozzle);
@@ -2900,6 +2924,8 @@ static void handleSettingsExport() {
   rgb565ToHtml(dispSettings.trackColor, buf); disp["trackColor"] = String(buf);
   rgb565ToHtml(dispSettings.clockTimeColor, buf); disp["clockTimeColor"] = String(buf);
   rgb565ToHtml(dispSettings.clockDateColor, buf); disp["clockDateColor"] = String(buf);
+  disp["clockTimeSize"] = dispSettings.clockTimeSize;
+  disp["hideClockDate"] = dispSettings.hideClockDate;
   disp["animatedBar"] = dispSettings.animatedBar;
   disp["pongClock"] = dispSettings.pongClock;
   disp["smallLabels"] = dispSettings.smallLabels;
@@ -3119,6 +3145,11 @@ static void handleSettingsImportFinish() {
     if (disp["trackColor"].is<const char*>()) dispSettings.trackColor = htmlToRgb565(disp["trackColor"]);
     if (disp["clockTimeColor"].is<const char*>()) dispSettings.clockTimeColor = htmlToRgb565(disp["clockTimeColor"]);
     if (disp["clockDateColor"].is<const char*>()) dispSettings.clockDateColor = htmlToRgb565(disp["clockDateColor"]);
+    if (disp["clockTimeSize"].is<int>()) {
+      int s = disp["clockTimeSize"].as<int>();
+      dispSettings.clockTimeSize = (s >= 0 && s <= 3) ? (uint8_t)s : 0;
+    }
+    if (disp["hideClockDate"].is<bool>()) dispSettings.hideClockDate = disp["hideClockDate"].as<bool>();
     if (disp["animatedBar"].is<bool>())       dispSettings.animatedBar = disp["animatedBar"].as<bool>();
     if (disp["pongClock"].is<bool>())           dispSettings.pongClock = disp["pongClock"].as<bool>();
     if (disp["smallLabels"].is<bool>())         dispSettings.smallLabels = disp["smallLabels"].as<bool>();

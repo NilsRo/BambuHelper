@@ -57,6 +57,8 @@ struct DisplaySettings {
                             // hardware revision that shows mirrored image.
   uint16_t clockTimeColor; // clock digits color (RGB565)
   uint16_t clockDateColor; // clock date/AM-PM color (RGB565)
+  uint8_t  clockTimeSize;  // 0=Auto, 1=Normal(1.0x), 2=Medium(1.5x), 3=Large(2.0x). Auto = Large on >=480, Medium on >=320, else Normal.
+  bool     hideClockDate;  // minimalist mode: time only, no date line
   bool     showBatteryIndicator; // Waveshare boards: show battery icon in status bar
   GaugeColors progress;
   GaugeColors nozzle;

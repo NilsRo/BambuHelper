@@ -135,6 +135,8 @@ void defaultDisplaySettings(DisplaySettings& ds) {
   ds.cydPanelClassic = false;
   ds.clockTimeColor = CLR_TEXT;
   ds.clockDateColor = CLR_TEXT_DIM;
+  ds.clockTimeSize = 0;        // Auto
+  ds.hideClockDate = false;
   ds.showBatteryIndicator = true;
 
   // Progress: green arc, green label, white value
@@ -286,6 +288,11 @@ void loadSettings() {
   dispSettings.cydPanelClassic = prefs.getBool("dsp_cydcls", def.cydPanelClassic);
   dispSettings.clockTimeColor = prefs.getUShort("dsp_clkt", CLR_TEXT);
   dispSettings.clockDateColor = prefs.getUShort("dsp_clkd", CLR_TEXT_DIM);
+  {
+    uint8_t cts = prefs.getUChar("dsp_clkts", def.clockTimeSize);
+    dispSettings.clockTimeSize = (cts <= 3) ? cts : 0;
+  }
+  dispSettings.hideClockDate = prefs.getBool("dsp_clkhd", def.hideClockDate);
   dispSettings.showBatteryIndicator = prefs.getBool("dsp_bat", def.showBatteryIndicator);
 
   loadGaugeColors("gc_prg", dispSettings.progress, def.progress);
@@ -506,6 +513,8 @@ void saveSettings() {
   prefs.putBool("dsp_cydcls", dispSettings.cydPanelClassic);
   prefs.putUShort("dsp_clkt", dispSettings.clockTimeColor);
   prefs.putUShort("dsp_clkd", dispSettings.clockDateColor);
+  prefs.putUChar("dsp_clkts", dispSettings.clockTimeSize);
+  prefs.putBool("dsp_clkhd", dispSettings.hideClockDate);
   prefs.putBool("dsp_bat", dispSettings.showBatteryIndicator);
 
   saveGaugeColors("gc_prg", dispSettings.progress);
