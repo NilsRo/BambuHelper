@@ -7,16 +7,23 @@
 #include "fonts/inter_10.h"
 #include "fonts/inter_14.h"
 #include "fonts/inter_19.h"
+#if defined(DISPLAY_320x480)
+// jc3248w535 carries an extra ~26 KB font blob so the gauge primary value
+// can render larger on the bigger canvas. Excluded from other boards to
+// keep the C3 / S3 Mini flash footprints unchanged.
+#include "fonts/inter_22.h"
+#endif
 
 static FontID currentFont = FONT_NONE;
 
 static void applyBitmapFallback(lgfx::LovyanGFX& gfx, FontID id) {
     gfx.unloadFont();
     switch (id) {
-        case FONT_SMALL: gfx.setTextFont(1); break;  // 6x8 GLCD
-        case FONT_BODY:  gfx.setTextFont(2); break;  // 16px
-        case FONT_LARGE: gfx.setTextFont(4); break;  // 26px
-        default:         gfx.setTextFont(2); break;
+        case FONT_SMALL:  gfx.setTextFont(1); break;  // 6x8 GLCD
+        case FONT_BODY:   gfx.setTextFont(2); break;  // 16px
+        case FONT_LARGE:  gfx.setTextFont(4); break;  // 26px
+        case FONT_XLARGE: gfx.setTextFont(4); break;  // no bitmap equivalent
+        default:          gfx.setTextFont(2); break;
     }
 }
 
@@ -32,6 +39,14 @@ void setFont(lgfx::LovyanGFX& gfx, FontID id) {
             break;
         case FONT_LARGE:
             if (!gfx.loadFont(inter_19)) applyBitmapFallback(gfx, FONT_LARGE);
+            break;
+        case FONT_XLARGE:
+#if defined(DISPLAY_320x480)
+            if (!gfx.loadFont(inter_22)) applyBitmapFallback(gfx, FONT_XLARGE);
+#else
+            // Font blob not linked on this board - fall back to FONT_LARGE.
+            if (!gfx.loadFont(inter_19)) applyBitmapFallback(gfx, FONT_LARGE);
+#endif
             break;
         case FONT_7SEG:
             gfx.unloadFont();

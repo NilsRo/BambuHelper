@@ -32,6 +32,10 @@ FONTS = [
     ("inter_10", "Inter-Regular.ttf", 12),
     ("inter_14", "Inter-Regular.ttf", 16),
     ("inter_19", "Inter-Bold.ttf",    22),
+    # Used only on jc3248w535 (DISPLAY_320x480) for gauge primary values -
+    # the larger canvas can afford a taller inscribed number without
+    # crowding the secondary line below it.
+    ("inter_22", "Inter-Bold.ttf",    26),
 ]
 
 FONTS_DIR = Path(__file__).parent.parent / "fonts"

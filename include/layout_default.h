@@ -24,6 +24,9 @@
 #define LY_GAUGE_R   32      // radius for all gauges
 #define LY_GAUGE_T   6       // progress arc thickness
 #define LY_TEMP_GAUGE_T 6    // temp/fan/humidity arc thickness
+#define LY_GAUGE_VALUE_FONT FONT_LARGE  // primary value font (Inter 19pt)
+#define LY_GAUGE_VALUE_NUDGE_Y 0        // extra Y shift for primary value when
+                                        // a secondary line is shown below it
 #define LY_COL1      42      // left column center X
 #define LY_COL2      120     // middle column center X
 #define LY_COL3      198     // right column center X

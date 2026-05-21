@@ -558,8 +558,8 @@ void drawProgressArc(lgfx::LovyanGFX& gfx, int16_t cx, int16_t cy, int16_t radiu
 
     gfx.setTextDatum(MC_DATUM);
     gfx.setTextColor(gc.value);
-    setFont(gfx, FONT_LARGE);
-    gfx.drawString(pctBuf, cx, cy - (compact ? 4 : 8));
+    setFont(gfx, LY_GAUGE_VALUE_FONT);
+    gfx.drawString(pctBuf, cx, cy - (compact ? 4 : 8) + LY_GAUGE_VALUE_NUDGE_Y);
 
     setFont(gfx, compact ? FONT_SMALL : FONT_BODY);
     gfx.setTextColor(CLR_TEXT_DIM);
@@ -620,9 +620,9 @@ void drawTempGauge(lgfx::LovyanGFX& gfx, int16_t cx, int16_t cy, int16_t radius,
     clearGaugeCenter(gfx, cx, cy, radius, thickness);
 
     gfx.setTextDatum(MC_DATUM);
-    setFont(gfx, FONT_LARGE);
+    setFont(gfx, LY_GAUGE_VALUE_FONT);
     gfx.setTextColor(valColor);
-    gfx.drawString(tempBuf, cx, hasTarget ? (cy - 4) : cy);
+    gfx.drawString(tempBuf, cx, hasTarget ? (cy - 4 + LY_GAUGE_VALUE_NUDGE_Y) : cy);
 
     if (hasTarget) {
       setFont(gfx, FONT_SMALL);
@@ -677,7 +677,7 @@ void drawFanGauge(lgfx::LovyanGFX& gfx, int16_t cx, int16_t cy, int16_t radius,
     clearGaugeCenter(gfx, cx, cy, radius, thickness);
 
     gfx.setTextDatum(MC_DATUM);
-    setFont(gfx, FONT_LARGE);
+    setFont(gfx, LY_GAUGE_VALUE_FONT);
     gfx.setTextColor(valColor);
     gfx.drawString(buf, cx, cy);
 
@@ -733,7 +733,7 @@ void drawHumidityGauge(lgfx::LovyanGFX& gfx, int16_t cx, int16_t cy, int16_t rad
     clearGaugeCenter(gfx, cx, cy, radius, thickness);
 
     gfx.setTextDatum(MC_DATUM);
-    setFont(gfx, FONT_LARGE);
+    setFont(gfx, LY_GAUGE_VALUE_FONT);
     gfx.setTextColor(present ? CLR_TEXT : CLR_TEXT_DIM);
     gfx.drawString(buf, cx, cy);
 
@@ -783,9 +783,9 @@ void drawLayerGauge(lgfx::LovyanGFX& gfx, int16_t cx, int16_t cy, int16_t radius
     int digits = strlen(layerBuf) + strlen(totalBuf);
     bool useSmall = (digits > 7);
 
-    setFont(gfx, useSmall ? FONT_BODY : FONT_LARGE);
+    setFont(gfx, useSmall ? FONT_BODY : LY_GAUGE_VALUE_FONT);
     gfx.setTextColor(CLR_TEXT);
-    gfx.drawString(layerBuf, cx, hasTot ? (cy - 4) : cy);
+    gfx.drawString(layerBuf, cx, hasTot ? (cy - 4 + LY_GAUGE_VALUE_NUDGE_Y) : cy);
 
     if (hasTot) {
       setFont(gfx, useSmall ? FONT_SMALL : FONT_BODY);
@@ -834,7 +834,7 @@ void drawClockWidget(lgfx::LovyanGFX& gfx, int16_t cx, int16_t cy, int16_t radiu
     gfx.fillCircle(cx, cy, radius - 1, bg);
 
     gfx.setTextDatum(MC_DATUM);
-    setFont(gfx, FONT_LARGE);
+    setFont(gfx, LY_GAUGE_VALUE_FONT);
     gfx.setTextColor(CLR_TEXT);
     gfx.drawString(timeBuf, cx, cy);
 

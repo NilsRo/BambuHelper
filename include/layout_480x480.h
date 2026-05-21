@@ -25,6 +25,9 @@
 #define LY_GAUGE_R   64
 #define LY_GAUGE_T   12
 #define LY_TEMP_GAUGE_T 6        // temp/fan/humidity arc thickness
+#define LY_GAUGE_VALUE_FONT FONT_LARGE  // primary value font (Inter 19pt)
+#define LY_GAUGE_VALUE_NUDGE_Y 0        // extra Y shift for primary value when
+                                        // a secondary line is shown below it
 #define LY_COL1      84
 #define LY_COL2      240
 #define LY_COL3      396

@@ -35,6 +35,9 @@
 #define LY_GAUGE_T   10           // progress arc thickness (grows inward)
 #define LY_TEMP_GAUGE_T 10        // temp/fan/humidity arc thickness - matches
                                   // progress arc so the 2x3 grid reads uniform
+#define LY_GAUGE_VALUE_FONT FONT_XLARGE  // larger inscribed numbers (Inter 22pt)
+#define LY_GAUGE_VALUE_NUDGE_Y (-4)     // bigger font pushes baseline down ~2 px;
+                                        // lift primary 4 px to clear the secondary
 #define LY_COL1      56
 #define LY_COL2      160
 #define LY_COL3      264
