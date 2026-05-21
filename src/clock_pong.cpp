@@ -786,4 +786,9 @@ void tickPongClock() {
 
   // Time (Font 7, on top of everything)
   drawTime();
+
+  // Sprite-backed builds (JC3248W535) need an explicit flush request per
+  // tick - reached only after the throttle gate, so this caps at ~50 Hz.
+  // Without this, the ball animation runs at the 500 ms keepalive cadence.
+  markFrameDirty();
 }
