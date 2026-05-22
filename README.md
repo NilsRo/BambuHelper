@@ -4,7 +4,7 @@ Dedicated Bambu Lab printer monitor built with ESP32-S3 Super Mini and a 1.54" 2
 
 Connects to your printer via MQTT over TLS and displays a real-time dashboard with arc gauges, animations, live stats, and optional buzzer notifications.
 
-Additional supported boards include CYD 240x320, Waveshare ESP32-S3-Zero, Waveshare 2" 240x320, Waveshare 1.54" 240x240, and ESP32-C3 DIY builds using the same 240x240 display as the ESP32-S3 version.
+Additional supported boards include Guition JC3248W535 320x480, CYD 240x320, Waveshare ESP32-S3-Zero (with 240x240 or 240x320 panel), Waveshare 2" 240x320, Waveshare 1.54" 240x240, and ESP32-C3 DIY builds using the same 240x240 display as the ESP32-S3 version.
 
 > **One-click setup:** as of v3.2, you can flash your board and configure WiFi entirely from the browser at **[keralots.github.io/BambuHelper](https://keralots.github.io/BambuHelper/)** - no PlatformIO, no esptool, no captive portal hopping.
 
@@ -34,21 +34,23 @@ When using Bambu Cloud, BambuHelper connects through Bambu Lab's cloud MQTT serv
 | Preview | Board | Notes |
 |---|---|---|
 | ![ESP32-S3 Super Mini dashboard](img/interface1.jpg) | **ESP32-S3 Super Mini + 1.54" ST7789** | Base implementation this project started from. Uses an ESP32-S3 Super Mini with a `1.54"` TFT SPI ST7789 (`240x240`) display. Use the `esp32s3` firmware build. Supports **up to 2 printers**. |
+| ![Guition JC3248W535](img/jc3248w535.jpg) | **Guition JC3248W535** | `320x480` IPS all-in-one board with **AXS15231B QSPI** display driver, ESP32-S3-N16R8 (`16MB` flash / `8MB` PSRAM), and capacitive touch (AXS15231B touch controller on I2C). Use the `jc3248w535` firmware build. Supports **up to 2 printers**. Currently in **beta** while layout polish continues. AliExpress: [pl.aliexpress.com/item/1005007566315926.html](https://pl.aliexpress.com/item/1005007566315926.html) |
 | ![Waveshare 2 inch](img/waveshare2inch.png) | **Waveshare ESP32-S3-Touch-LCD-2** | `240x320` ST7789 version with ESP32-S3, sold as a more plug-and-play option. Use the `ws_lcd_200` firmware build. Supports **up to 2 printers**, like the main ESP32-S3 DIY version. Product page: [waveshare.com/esp32-s3-touch-lcd-2.htm](https://www.waveshare.com/esp32-s3-touch-lcd-2.htm) Case (Horizontal and vertical): [MakerWorld model](https://makerworld.com/en/models/2773835) |
 | ![Waveshare 1.54 inch](img/waveshare1.54inch.png) | **Waveshare ESP32-S3-Touch-LCD-1.54** | `240x240` ST7789 with ESP32-S3, touchscreen, battery holder, and 3 built-in buttons. Use the `ws_lcd_154` firmware build. Supports **up to 2 printers**. The left button (BOOT) works as a screen switcher alongside the touchscreen. **Battery power:** press and hold the center PWR button to power on. To power off, hold the left (BOOT) and right buttons simultaneously for 1.5 seconds. Product page: [waveshare.com/esp32-s3-touch-lcd-1.54.htm](https://www.waveshare.com/esp32-s3-touch-lcd-1.54.htm) |
 | ![ESP32-C3 board](img/ESP32c3Board.png) | **ESP32-C3 Super Mini** | DIY version, just like the main ESP32-S3 build, using the same `240x240` ST7789 display. Use the `esp32c3` firmware build. Due to RAM limits, this board supports **1 printer only**. |
 | ![Waveshare ESP32-S3-Zero](img/es32s3zero.png) | **Waveshare ESP32-S3-Zero + 1.54" ST7789** | DIY version for the ESP32-S3FH4R2 module with `4MB` flash and `2MB` PSRAM. Use the `esp32s3_zero` firmware build. It uses the same external ST7789 wiring as the ESP32-S3 Super Mini build and supports **up to 2 printers**. GPIO21 is occupied by the onboard WS2812 RGB LED. Product page: [waveshare.com/esp32-s3-zero.htm](https://www.waveshare.com/esp32-s3-zero.htm) |
+| ![ESP32-S3-Zero with 2" 240x320 panel](img/esp32s3_zero_320.jpg) | **Waveshare ESP32-S3-Zero + 2.0" ST7789V (240x320)** | DIY variant of the ESP32-S3-Zero build using a larger `240x320` **ST7789V** panel module instead of the 1.54" 240x240. Same pinout as the standard `esp32s3_zero` build - only the panel differs (driven through the existing 240x320 layout). Use the `esp32s3_zero_320` firmware build. Supports **up to 2 printers**. Display module (AliExpress): [pl.aliexpress.com/item/1005007523612119.html](https://pl.aliexpress.com/item/1005007523612119.html) |
 | ![CYD display](img/CYD.png) | **CYD / ESP32-2432S028** (ILI9341) | `240x320` **ILI9341** all-in-one board. Use the `cyd` firmware build. Due to RAM limits, this board supports **1 printer only**. When flashing from [ESP Web Flasher](https://espressif.github.io/esptool-js/), set **Baudrate: 115200** before clicking **Connect**. If the first attempt fails, click **Disconnect** and then **Connect** again without unplugging the USB cable. If colors look reversed (white background instead of dark), enable **Invert display colors (fix white background)** in the web UI under **Display**. Case shown in the photo: [MakerWorld model](https://makerworld.com/models/2721746). |
-| ![CYD TZT variant](img/CYD_tzt.png) | **CYD / TZT L1435-2.4** (ST7789) | Looks almost identical to the standard CYD, but uses a `240x320` **ST7789V** panel (instead of ILI9341) and the backlight is on GPIO27. Use the `tzt_2432` firmware build - the regular `cyd` build will give you a black screen on this hardware. Due to RAM limits, this board supports **1 printer only**. Often sold on Aliexpress as *"TZT ESP32 LVGL 2.4 inch LCD TFT 240*320 With Touch"*. |
 
-### Community-Maintained Boards
+### Additional Boards (Hardware Not Owned by Maintainer)
 
-> These boards have working firmware contributed and tested by the community, but the maintainer doesn't own the hardware. They may require custom toolchain forks and aren't validated on every release. For issues specific to these boards, please ping the listed maintainer.
+> Firmware for these boards exists and builds cleanly, but the maintainer doesn't physically own the hardware. They may require custom toolchain forks, aren't validated on every release, and individual features (e.g. touch) might still be experimental. For issues specific to these boards, please ping the listed maintainer / tester.
 
-| Preview | Board | Notes | Maintainer |
+| Preview | Board | Notes | Maintainer / Tester |
 |---|---|---|---|
 | ![SenseCAP Indicator](img/sensecapBoard.png) | **Seeed SenseCAP Indicator** | `480x480` ST7701S RGB panel with ESP32-S3, FT5X06 capacitive touch, `8MB` flash with OPI PSRAM, all-in-one industrial enclosure. Use the `sensecap_indicator` firmware build. Supports **up to 2 printers**. Requires custom forks of `arduino-esp32` (TCA9535 IO expander) and `LovyanGFX` (ST7701S RGB panel), both pinned to specific commits in `boards/sensecap_indicator.ini`. Product page: [seeedstudio.com/SenseCAP-Indicator-D1-p-5695.html](https://www.seeedstudio.com/SenseCAP-Indicator-D1-p-5695.html) | [@kjames2001](https://github.com/kjames2001) |
-| _no preview_ | **Waveshare ESP32-S3-Touch-LCD-2.8** | `240x320` ST7789 with ESP32-S3 and **CST328** capacitive touch (different chip from the 2.0" board, so the `ws_lcd_200` firmware will boot but the screen stays black). Use the `ws_lcd_280` firmware build. Same 240x320 layout as the 2.0" - supports **up to 2 printers**. Battery / IMU / audio not wired up in firmware. Pinout from the [Waveshare wiki](https://www.waveshare.com/wiki/ESP32-S3-Touch-LCD-2.8). Product page: [waveshare.com/esp32-s3-touch-lcd-2.8.htm](https://www.waveshare.com/esp32-s3-touch-lcd-2.8.htm) | [@FranciscoSaoMarcos](https://github.com/FranciscoSaoMarcos) (tester) |
+| ![Waveshare 2.8 inch](img/ws_lcd_280.png) | **Waveshare ESP32-S3-Touch-LCD-2.8** | `240x320` ST7789 with ESP32-S3 and **CST328** capacitive touch (different chip from the 2.0" board, so the `ws_lcd_200` firmware will boot but the screen stays black). Use the `ws_lcd_280` firmware build. Same 240x320 layout as the 2.0" - supports **up to 2 printers**. **Touch driver is still experimental** - the display works, but the CST328 may not register taps reliably on all board revisions. Battery / IMU / audio not wired up in firmware. Pinout from the [Waveshare wiki](https://www.waveshare.com/wiki/ESP32-S3-Touch-LCD-2.8). Product page: [waveshare.com/esp32-s3-touch-lcd-2.8.htm](https://www.waveshare.com/esp32-s3-touch-lcd-2.8.htm) | [@FranciscoSaoMarcos](https://github.com/FranciscoSaoMarcos) (tester) |
+| ![CYD TZT variant](img/CYD_tzt.png) | **CYD / TZT L1435-2.4** (ST7789) | Looks almost identical to the standard CYD, but uses a `240x320` **ST7789V** panel (instead of ILI9341) and the backlight is on GPIO27. Use the `tzt_2432` firmware build - the regular `cyd` build will give you a black screen on this hardware. Due to RAM limits, this board supports **1 printer only**. Often sold on Aliexpress as *"TZT ESP32 LVGL 2.4 inch LCD TFT 240*320 With Touch"*. | _community_ |
 
 ## Features
 
@@ -117,11 +119,13 @@ Adjust pin assignments in `platformio.ini` `build_flags` to match your wiring (o
 
 Cycles between printers, wakes the display from sleep, and (when held) dims the optional status LED. All input methods are configured from the web interface under **Multi-Printer** - no recompilation needed.
 
-**Built-in capacitive touchscreens** (no wiring needed):
+**Built-in touchscreens** (no wiring needed):
 - **CYD / ESP32-2432S028** - XPT2046 resistive touch, automatic
 - **TZT L1435-2.4** - XPT2046 resistive touch, same pins as CYD, automatic
 - **Waveshare ESP32-S3-Touch-LCD-2** - CST816D capacitive on I2C (GPIO48/47), automatic
 - **Waveshare ESP32-S3-Touch-LCD-1.54** - CST816 capacitive on I2C (GPIO42/41), plus three hardware buttons - BOOT (GPIO0), PWR centre (GPIO5), AUX (GPIO4)
+- **Waveshare ESP32-S3-Touch-LCD-2.8** - CST328 capacitive on I2C (GPIO1/3), reset on GPIO2, automatic. Touch driver is experimental - see the additional-boards note above.
+- **Guition JC3248W535** - AXS15231B capacitive touch on I2C (GPIO4/8), polled (no IRQ wired), automatic
 
 **External TTP223 capacitive touch sensor** (DIY ESP32-S3 / ESP32-S3-Zero / ESP32-C3 builds):
 
@@ -181,11 +185,11 @@ Open **[keralots.github.io/BambuHelper](https://keralots.github.io/BambuHelper/)
 
 After the flash, the install dialog runs a 3-minute **Configure WiFi** step right in the browser using Improv-Serial - type your home SSID/password and the device joins your network without you ever having to connect to the captive portal. The device still falls back to AP mode (showing the SSID and password on its screen) if you dismiss the dialog or run out of time.
 
-Supports the 7 most common boards (ESP32-S3 SuperMini, ESP32-S3-Zero, ESP32-C3 SuperMini, Waveshare ESP32-S3-Touch-LCD-2, Waveshare ESP32-S3-Touch-LCD-1.54, CYD / ESP32-2432S028, TZT L1435-2.4). For the community-maintained SenseCAP Indicator use the manual flow below.
+Supports the 8 most common boards (ESP32-S3 SuperMini, ESP32-S3-Zero, ESP32-C3 SuperMini, Waveshare ESP32-S3-Touch-LCD-2, Waveshare ESP32-S3-Touch-LCD-1.54, Guition JC3248W535, CYD / ESP32-2432S028, TZT L1435-2.4). For the community-maintained SenseCAP Indicator and the experimental Waveshare ESP32-S3-Touch-LCD-2.8 use the manual flow below.
 
 ### Manual: Generic ESP Web Flasher
 
-1. Download the latest firmware from [Releases](../../releases). **If you are flashing a new device for the first time**, use the file ending with **-Full** (for example `BambuHelper-esp32s3-v3.2-Full.bin`). The regular `-ota.bin` file is for OTA updates on devices that already have BambuHelper installed.
+1. Download the latest firmware from [Releases](../../releases). **If you are flashing a new device for the first time**, use the file ending with **-Full** (for example `BambuHelper-esp32s3-v3.3-Full.bin`). The regular `-ota.bin` file is for OTA updates on devices that already have BambuHelper installed.
 2. Open [ESP Web Flasher](https://espressif.github.io/esptool-js/) in Chrome or Edge
 3. If you are flashing a **CYD** or **TZT L1435-2.4**, set **Baudrate** to **115200** before clicking **Connect**. Two or more attempts may be needed - the first one will fail. This applies to both CYD-shaped boards (they use a CH340 USB-Serial chip that does not tolerate high baud rates on first contact).
 4. Connect your ESP32 via USB
@@ -209,14 +213,16 @@ The device reboots automatically once the update is written; the web page reload
 
 | Board | Use this `Full` file for first flash / recovery |
 |---|---|
-| ESP32-S3 Super Mini | `BambuHelper-esp32s3-v3.2-Full.bin` |
-| Waveshare ESP32-S3-Zero | `BambuHelper-esp32s3_zero-v3.2-Full.bin` |
-| CYD / ESP32-2432S028 | `BambuHelper-cyd-v3.2-Full.bin` |
-| TZT L1435-2.4 | `BambuHelper-tzt_2432-v3.2-Full.bin` |
-| Waveshare ESP32-S3-Touch-LCD-2 | `BambuHelper-ws_lcd_200-v3.2-Full.bin` |
-| Waveshare ESP32-S3-Touch-LCD-1.54 | `BambuHelper-ws_lcd_154-v3.2-Full.bin` |
-| ESP32-C3 Super Mini | `BambuHelper-esp32c3-v3.2-Full.bin` |
-| Seeed SenseCAP Indicator | `BambuHelper-sensecap_indicator-v3.2-Full.bin` |
+| ESP32-S3 Super Mini | `BambuHelper-esp32s3-v3.3-Full.bin` |
+| Guition JC3248W535 | `BambuHelper-jc3248w535-v3.3-Full.bin` |
+| Waveshare ESP32-S3-Zero | `BambuHelper-esp32s3_zero-v3.3-Full.bin` |
+| CYD / ESP32-2432S028 | `BambuHelper-cyd-v3.3-Full.bin` |
+| TZT L1435-2.4 | `BambuHelper-tzt_2432-v3.3-Full.bin` |
+| Waveshare ESP32-S3-Touch-LCD-2 | `BambuHelper-ws_lcd_200-v3.3-Full.bin` |
+| Waveshare ESP32-S3-Touch-LCD-1.54 | `BambuHelper-ws_lcd_154-v3.3-Full.bin` |
+| ESP32-C3 Super Mini | `BambuHelper-esp32c3-v3.3-Full.bin` |
+
+> Community / experimental boards (Waveshare ESP32-S3-Touch-LCD-2.8, ESP32-S3-Zero with 2.0" 240x320 panel, SenseCAP Indicator) are not part of the automated release pipeline - build them locally with `pio.exe run -e <env>` and flash the resulting `.pio/build/<env>/firmware.bin`.
 
 ## Setup
 
@@ -399,7 +405,7 @@ The display is managed from the **Display** section of the web interface (see ab
 
 BambuHelper supports monitoring up to 2 printers simultaneously via dual MQTT connections.
 
-> **Low-RAM boards default to 1 printer.** Each MQTT connection takes ~85 KB of heap (TLS session + message buffer). The full-RAM boards (esp32s3, esp32s3_zero, ws_lcd_200, ws_lcd_154, sensecap_indicator) run two printers comfortably. The low-RAM boards (**CYD**, **TZT L1435-2.4**, **ESP32-C3**) ship with a single printer slot by default, but expose an **experimental opt-in 2-printer mode** in **Printer Settings** - try it if you really need two, but expect tighter memory and the occasional disconnect under load.
+> **Low-RAM boards default to 1 printer.** Each MQTT connection takes ~85 KB of heap (TLS session + message buffer). The full-RAM boards (esp32s3, esp32s3_zero, esp32s3_zero_320, ws_lcd_200, ws_lcd_154, jc3248w535, ws_lcd_280, sensecap_indicator) run two printers comfortably. The low-RAM boards (**CYD**, **TZT L1435-2.4**, **ESP32-C3**) ship with a single printer slot by default, but expose an **experimental opt-in 2-printer mode** in **Printer Settings** - try it if you really need two, but expect tighter memory and the occasional disconnect under load.
 
 ### Rotation Modes
 
