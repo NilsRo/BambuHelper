@@ -2911,6 +2911,24 @@ static void drawPrinting() {
     }
   }
 
+#if defined(DISPLAY_320x480)
+  // === File name line (320x480 only — fills the gap above the bottom bar) ===
+  bool fileChanged = forceRedraw ||
+                     strcmp(s.subtaskName, prevState.subtaskName) != 0;
+  if (fileChanged) {
+    markFrameDirty();
+    const int16_t fileW  = (int16_t)tft.width();
+    const int16_t fileCx = fileW / 2;
+    tft.fillRect(0, LY_FILE_Y - LY_FILE_H / 2, fileW, LY_FILE_H, CLR_BG);
+    if (s.subtaskName[0] != '\0') {
+      setFont(tft, FONT_BODY);
+      tft.setTextDatum(MC_DATUM);
+      tft.setTextColor(CLR_TEXT_DIM, CLR_BG);
+      drawStringClipped(s.subtaskName, fileCx, LY_FILE_Y, fileW - 20);
+    }
+  }
+#endif
+
   // === Bottom status bar — Filament/WiFi | Layer (or Power) | Speed ===
   // Tasmota alternation state (persists across redraws)
   static bool     altShowPower    = false;

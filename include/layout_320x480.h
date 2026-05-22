@@ -46,10 +46,12 @@
 
 // --- AMS tray visualization zone (below gauge grid) ---
 // Row 2 gauges bottom edge is at y=276 (228+48). Labels extend ~12px below,
-// so AMS starts at y=295 with 4px gap under it (ETA begins at y=355).
+// so AMS starts at y=295. Zone is 72 px tall with 42 px bars; ETA begins at
+// y=380 and the bottom status bar is pinned near the screen edge (y=450) so
+// the panel's lower ~40 px isn't left as dead space during a print.
 #define LY_AMS_Y          295
-#define LY_AMS_H          56
-#define LY_AMS_BAR_H      32
+#define LY_AMS_H          72
+#define LY_AMS_BAR_H      42
 #define LY_AMS_BAR_GAP    3
 #define LY_AMS_GROUP_GAP  10
 #define LY_AMS_LABEL_OFFY 4
@@ -68,18 +70,27 @@
 #define LY_BAT_SHIFT_X 20
 
 // --- Printing: ETA / info zone ---
-#define LY_ETA_Y        360
+#define LY_ETA_Y        380
 #define LY_ETA_H        46
-#define LY_ETA_TEXT_Y   383
+#define LY_ETA_TEXT_Y   403
+
+// --- Printing: file name line (fills the gap between ETA and bottom bar) ---
+// FONT_BODY ~16 px tall, drawn with MC_DATUM. Zone clears LY_FILE_Y±LY_FILE_H/2,
+// so text spans roughly y=429..447 and leaves 3 px to the bottom bar at y=450.
+#define LY_FILE_Y       436
+#define LY_FILE_H       18
 
 // --- Printing: bottom status bar ---
-#define LY_BOT_Y        414
+#define LY_BOT_Y        450
 #define LY_BOT_H        26
-#define LY_BOT_CY       427
+#define LY_BOT_CY       463
 
 // --- Printing: WiFi signal indicator ---
+// LY_WIFI_Y is only the default arg for drawWifiSignalIndicator(); print and
+// idle screens both pass an explicit center Y. Kept aligned to LY_BOT_CY so the
+// default lands on the bottom bar baseline if any caller relies on it.
 #define LY_WIFI_X       6
-#define LY_WIFI_Y       452
+#define LY_WIFI_Y       463
 
 // --- Idle screen (with printer) ---
 #define LY_IDLE_NAME_Y      45
