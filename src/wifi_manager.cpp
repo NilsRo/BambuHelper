@@ -123,6 +123,7 @@ static void completeWiFiStartup() {
     unsigned long ipStart = millis();
     while (millis() - ipStart < 1500) {
       updateDisplay();
+      flushFrame();  // JC3248W535: push sprite to panel during blocking loop
       delay(50);
     }
   }
@@ -169,6 +170,7 @@ void initWiFi() {
              millis() - start < WIFI_CONNECT_TIMEOUT) {
         delay(100);
         updateDisplay();
+        flushFrame();  // JC3248W535: push sprite to panel during blocking loop
       }
       if (WiFi.status() == WL_CONNECTED) break;
 
