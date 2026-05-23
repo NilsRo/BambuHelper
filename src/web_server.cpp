@@ -152,6 +152,10 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
     background: #0D1117; color: #8B949E; font-size: 12px; cursor: pointer;
   }
   .theme-btn:hover { border-color: #58A6FF; color: #E6EDF3; }
+  .bulk-bar { margin-bottom: 10px; padding: 8px; background: #0D1117; border-radius: 6px; border: 1px solid #1F2630; }
+  .bulk-bar .color-row { flex-wrap: wrap; gap: 8px; margin: 0; }
+  .bulk-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .bulk-hint { margin-top: 6px; font-size: 11px; color: #8B949E; }
   .global-colors { display: flex; gap: 16px; margin-bottom: 8px; }
   .global-colors .color-row { margin: 0; }
   .subsection-toggle {
@@ -454,6 +458,19 @@ R"rawliteral(
             <button type="button" class="theme-btn" onclick="applyTheme('neon')">Neon</button>
             <button type="button" class="theme-btn" onclick="applyTheme('warm')">Warm</button>
             <button type="button" class="theme-btn" onclick="applyTheme('ocean')">Ocean</button>
+          </div>
+
+          <div class="bulk-bar">
+            <div class="color-row">
+              <label>All Arcs</label><input type="color" id="bulk_a" value="#00FF00" oninput="bulkSet('a',this.value)">
+              <label>All Labels</label><input type="color" id="bulk_l" value="#00FF00" oninput="bulkSet('l',this.value)">
+              <label>All Values</label><input type="color" id="bulk_v" value="#FFFFFF" oninput="bulkSet('v',this.value)">
+            </div>
+            <div class="bulk-actions">
+              <button type="button" class="theme-btn" onclick="resetGaugeColors()">Reset to Defaults</button>
+              <button type="button" class="theme-btn" onclick="randomGaugeColors()">Random</button>
+            </div>
+            <div class="bulk-hint">Bulk pickers update form only - click "Apply Display Settings" to save.</div>
           </div>
 
           <div class="global-colors">
@@ -1370,31 +1387,37 @@ function savePower(){
 setTimeout(function(){ selectPowerTab(0); }, 150);
 
 // --- Display ---
+var GAUGE_KEYS=['prg','noz','bed','pfn','afn','afr','cfn','exh','cht','hbk'];
 var themes={
   default:{bg:'#081018',track:'#182028',clkt:'#FFFFFF',clkd:'#C0C0C0',
     prg:{a:'#00FF00',l:'#00FF00',v:'#FFFFFF'},noz:{a:'#FFA500',l:'#FFA500',v:'#FFFFFF'},
     bed:{a:'#00FFFF',l:'#00FFFF',v:'#FFFFFF'},pfn:{a:'#00FFFF',l:'#00FFFF',v:'#FFFFFF'},
-    afn:{a:'#FFA500',l:'#FFA500',v:'#FFFFFF'},cfn:{a:'#00FF00',l:'#00FF00',v:'#FFFFFF'},
+    afn:{a:'#FFA500',l:'#FFA500',v:'#FFFFFF'},afr:{a:'#FFA500',l:'#FFA500',v:'#FFFFFF'},
+    cfn:{a:'#00FF00',l:'#00FF00',v:'#FFFFFF'},exh:{a:'#00FF00',l:'#00FF00',v:'#FFFFFF'},
     cht:{a:'#00FFFF',l:'#00FFFF',v:'#FFFFFF'},hbk:{a:'#FFA500',l:'#FFA500',v:'#FFFFFF'}},
   mono_green:{bg:'#000800',track:'#0A1A0A',clkt:'#00FF41',clkd:'#00CC33',
     prg:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},noz:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},
     bed:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},pfn:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},
-    afn:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},cfn:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},
+    afn:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},afr:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},
+    cfn:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},exh:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},
     cht:{a:'#00FF41',l:'#00CC33',v:'#00FF41'},hbk:{a:'#00FF41',l:'#00CC33',v:'#00FF41'}},
   neon:{bg:'#0A0014',track:'#1A0A2E',clkt:'#FF00FF',clkd:'#AA00FF',
     prg:{a:'#FF00FF',l:'#FF00FF',v:'#FFFFFF'},noz:{a:'#FF4400',l:'#FF6600',v:'#FFFFFF'},
     bed:{a:'#00FFFF',l:'#00FFFF',v:'#FFFFFF'},pfn:{a:'#00FF88',l:'#00FF88',v:'#FFFFFF'},
-    afn:{a:'#FFFF00',l:'#FFFF00',v:'#FFFFFF'},cfn:{a:'#FF00FF',l:'#FF00FF',v:'#FFFFFF'},
+    afn:{a:'#FFFF00',l:'#FFFF00',v:'#FFFFFF'},afr:{a:'#FFFF00',l:'#FFFF00',v:'#FFFFFF'},
+    cfn:{a:'#FF00FF',l:'#FF00FF',v:'#FFFFFF'},exh:{a:'#FF00FF',l:'#FF00FF',v:'#FFFFFF'},
     cht:{a:'#00FFFF',l:'#00FFFF',v:'#FFFFFF'},hbk:{a:'#FF4400',l:'#FF6600',v:'#FFFFFF'}},
   warm:{bg:'#140A00',track:'#2E1A08',clkt:'#FFEEDD',clkd:'#FFB347',
     prg:{a:'#FFB347',l:'#FFB347',v:'#FFEEDD'},noz:{a:'#FF6347',l:'#FF6347',v:'#FFEEDD'},
     bed:{a:'#FFA500',l:'#FFA500',v:'#FFEEDD'},pfn:{a:'#FFD700',l:'#FFD700',v:'#FFEEDD'},
-    afn:{a:'#FF8C00',l:'#FF8C00',v:'#FFEEDD'},cfn:{a:'#FFB347',l:'#FFB347',v:'#FFEEDD'},
+    afn:{a:'#FF8C00',l:'#FF8C00',v:'#FFEEDD'},afr:{a:'#FF8C00',l:'#FF8C00',v:'#FFEEDD'},
+    cfn:{a:'#FFB347',l:'#FFB347',v:'#FFEEDD'},exh:{a:'#FFB347',l:'#FFB347',v:'#FFEEDD'},
     cht:{a:'#FFA500',l:'#FFA500',v:'#FFEEDD'},hbk:{a:'#FF8C00',l:'#FF8C00',v:'#FFEEDD'}},
   ocean:{bg:'#000A14',track:'#0A1A2E',clkt:'#E0F0FF',clkd:'#00BFFF',
     prg:{a:'#00BFFF',l:'#00BFFF',v:'#E0F0FF'},noz:{a:'#FF7F50',l:'#FF7F50',v:'#E0F0FF'},
     bed:{a:'#4169E1',l:'#4169E1',v:'#E0F0FF'},pfn:{a:'#00CED1',l:'#00CED1',v:'#E0F0FF'},
-    afn:{a:'#48D1CC',l:'#48D1CC',v:'#E0F0FF'},cfn:{a:'#20B2AA',l:'#20B2AA',v:'#E0F0FF'},
+    afn:{a:'#48D1CC',l:'#48D1CC',v:'#E0F0FF'},afr:{a:'#48D1CC',l:'#48D1CC',v:'#E0F0FF'},
+    cfn:{a:'#20B2AA',l:'#20B2AA',v:'#E0F0FF'},exh:{a:'#20B2AA',l:'#20B2AA',v:'#E0F0FF'},
     cht:{a:'#4169E1',l:'#4169E1',v:'#E0F0FF'},hbk:{a:'#FF7F50',l:'#FF7F50',v:'#E0F0FF'}}
 };
 
@@ -1404,14 +1427,58 @@ function applyTheme(name){
   document.getElementById('clr_track').value=t.track;
   document.getElementById('clk_time').value=t.clkt;
   document.getElementById('clk_date').value=t.clkd;
-  var g=['prg','noz','bed','pfn','afn','cfn','cht','hbk'];
-  for(var i=0;i<g.length;i++){
-    var c=t[g[i]];
-    document.getElementById(g[i]+'_a').value=c.a;
-    document.getElementById(g[i]+'_l').value=c.l;
-    document.getElementById(g[i]+'_v').value=c.v;
+  for(var i=0;i<GAUGE_KEYS.length;i++){
+    var k=GAUGE_KEYS[i], c=t[k];
+    if(!c){ console.warn('theme '+name+' missing '+k); continue; }
+    document.getElementById(k+'_a').value=c.a;
+    document.getElementById(k+'_l').value=c.l;
+    document.getElementById(k+'_v').value=c.v;
   }
   applyDisplay();
+}
+
+function bulkSet(suffix,color){
+  for(var i=0;i<GAUGE_KEYS.length;i++){
+    document.getElementById(GAUGE_KEYS[i]+'_'+suffix).value=color;
+  }
+}
+
+var DEFAULT_GAUGES={
+  prg:{a:'#00FF00',l:'#00FF00',v:'#FFFFFF'},noz:{a:'#FF7D00',l:'#FF7D00',v:'#FFFFFF'},
+  bed:{a:'#00FFFF',l:'#00FFFF',v:'#FFFFFF'},pfn:{a:'#00FFFF',l:'#00FFFF',v:'#FFFFFF'},
+  afn:{a:'#FF7D00',l:'#FF7D00',v:'#FFFFFF'},afr:{a:'#FF7D00',l:'#FF7D00',v:'#FFFFFF'},
+  cfn:{a:'#00FF00',l:'#00FF00',v:'#FFFFFF'},exh:{a:'#00FF00',l:'#00FF00',v:'#FFFFFF'},
+  cht:{a:'#00FFFF',l:'#00FFFF',v:'#FFFFFF'},hbk:{a:'#FF7D00',l:'#FF7D00',v:'#FFFFFF'}
+};
+function resetGaugeColors(){
+  for(var i=0;i<GAUGE_KEYS.length;i++){
+    var k=GAUGE_KEYS[i], c=DEFAULT_GAUGES[k];
+    document.getElementById(k+'_a').value=c.a;
+    document.getElementById(k+'_l').value=c.l;
+    document.getElementById(k+'_v').value=c.v;
+  }
+  applyDisplay();
+}
+
+function randomGaugeColors(){
+  var baseH=Math.floor(Math.random()*360);
+  for(var i=0;i<GAUGE_KEYS.length;i++){
+    var h=(baseH+i*36)%360, hex=hslToHex(h,70,55);
+    document.getElementById(GAUGE_KEYS[i]+'_a').value=hex;
+    document.getElementById(GAUGE_KEYS[i]+'_l').value=hex;
+    document.getElementById(GAUGE_KEYS[i]+'_v').value='#FFFFFF';
+  }
+  applyDisplay();
+}
+
+function hslToHex(h,s,l){
+  s/=100; l/=100;
+  var c=(1-Math.abs(2*l-1))*s, x=c*(1-Math.abs(((h/60)%2)-1)), m=l-c/2;
+  var r=0,g=0,b=0;
+  if(h<60){r=c;g=x;}else if(h<120){r=x;g=c;}else if(h<180){g=c;b=x;}
+  else if(h<240){g=x;b=c;}else if(h<300){r=x;b=c;}else{r=c;b=x;}
+  function h2(v){return ('0'+Math.round((v+m)*255).toString(16)).slice(-2);}
+  return '#'+h2(r)+h2(g)+h2(b);
 }
 
 function applyDisplay(){
@@ -1443,11 +1510,11 @@ function applyDisplay(){
   p.append('clk_date',document.getElementById('clk_date').value);
   p.append('clk_size',document.getElementById('clk_size').value);
   if(document.getElementById('clk_hidedate').checked) p.append('clk_hidedate','1');
-  var g=['prg','noz','bed','pfn','afn','cfn','cht','hbk'];
-  for(var i=0;i<g.length;i++){
-    p.append(g[i]+'_a',document.getElementById(g[i]+'_a').value);
-    p.append(g[i]+'_l',document.getElementById(g[i]+'_l').value);
-    p.append(g[i]+'_v',document.getElementById(g[i]+'_v').value);
+  for(var i=0;i<GAUGE_KEYS.length;i++){
+    var k=GAUGE_KEYS[i];
+    p.append(k+'_a',document.getElementById(k+'_a').value);
+    p.append(k+'_l',document.getElementById(k+'_l').value);
+    p.append(k+'_v',document.getElementById(k+'_v').value);
   }
   fetch('/apply',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()}).then(function(r){
     if(r.ok) showToast('Applied!'); else showToast('Error');
