@@ -37,6 +37,9 @@ bool tasmotaKwhChangedForSlot(uint8_t slot);
 void tasmotaMarkPrintStart(uint8_t plug);
 void tasmotaMarkPrintEnd(uint8_t plug);
 
+// Manual relay control from the web UI. Returns true on HTTP 200.
+bool tasmotaSetPower(uint8_t plug, bool on);
+
 // Stats accessor used by web /power/stats. Returns NaN-like sentinels (-1) for
 // fields the plug has not reported yet.
 struct TasmotaPlugStatsView {

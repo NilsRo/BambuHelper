@@ -884,6 +884,11 @@ R"rawliteral(
         <div style="margin-top:4px">Now: <span id="ptWatts">-</span></div>
       </div>
 
+      <hr style="border:none;border-top:1px solid #30363d;margin:14px 0">
+      <div style="font-size:13px;color:#C9D1D9;margin-bottom:6px"><strong>Manual control</strong></div>
+      <button type="button" class="btn btn-primary" id="btnPowerOn"  onclick="powerControl(1)" style="display:none">Power On</button>
+      <button type="button" class="btn btn-danger"  id="btnPowerOff" onclick="powerControl(0)" style="display:none">Power Off</button>
+
       <button type="button" class="btn btn-primary" style="margin-top:14px" onclick="savePower()">Save Power Settings</button>
       <div id="powerStatus" role="status" aria-live="polite" aria-atomic="true" style="margin-top:8px;font-size:13px"></div>
     </div>
@@ -1370,9 +1375,31 @@ function refreshPowerStats(){
     document.getElementById('ptToday').textContent = fmtKwh(s.today)     + (s.today     >= 0 ? fmtMoney(s.today     * tar, cur) : '');
     document.getElementById('ptTotal').textContent = fmtKwh(s.total)     + (s.total     >= 0 ? fmtMoney(s.total     * tar, cur) : '');
     document.getElementById('ptWatts').textContent = (s.online && s.watts >= 0) ? (s.watts.toFixed(0) + ' W') : '-';
+    var on = s.online && s.watts > 0.5;
+    document.getElementById('btnPowerOn').style.display  = on ? 'none' : '';
+    document.getElementById('btnPowerOff').style.display = on ? '' : 'none';
   }).catch(function(){});
 }
 setInterval(function(){ if (document.getElementById('sec-power').classList.contains('open')) refreshPowerStats(); }, 5000);
+
+function powerControl(on){
+  var label = on ? 'Power ON' : 'Power OFF';
+  if (!confirm(label + ' plug ' + (currentPowerPlug + 1) + ' now?')) return;
+  var p = new URLSearchParams();
+  p.append('plug', String(currentPowerPlug));
+  p.append('on', on ? '1' : '0');
+  fetch('/power/control',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()})
+    .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});})
+    .then(function(res){
+      if (res.ok && res.d.status === 'ok') {
+        showToast(label + ' sent');
+        setTimeout(refreshPowerStats, 800);
+      } else {
+        showToast((res.d && res.d.message) || (label + ' failed'));
+      }
+    })
+    .catch(function(e){showToast(label + ' failed');console.warn('powerControl:',e);});
+}
 
 function savePower(){
   var p = new URLSearchParams();
@@ -3044,6 +3071,24 @@ static void handleSavePower() {
   server.send(200, "application/json", "{\"status\":\"ok\"}");
 }
 
+static void handlePowerControl() {
+  int plug = server.hasArg("plug") ? server.arg("plug").toInt() : 0;
+  if (plug < 0 || plug >= TASMOTA_PLUG_COUNT || !tasmotaSettings[plug].enabled) {
+    server.send(400, "application/json", "{\"status\":\"error\",\"message\":\"Plug not enabled\"}");
+    return;
+  }
+  if (!server.hasArg("on")) {
+    server.send(400, "application/json", "{\"status\":\"error\",\"message\":\"Missing on parameter\"}");
+    return;
+  }
+  bool on = (server.arg("on").toInt() != 0);
+  if (tasmotaSetPower((uint8_t)plug, on)) {
+    server.send(200, "application/json", "{\"status\":\"ok\"}");
+  } else {
+    server.send(502, "application/json", "{\"status\":\"error\",\"message\":\"Plug did not respond\"}");
+  }
+}
+
 // ---------------------------------------------------------------------------
 //  Settings export (JSON download)
 // ---------------------------------------------------------------------------
@@ -3747,6 +3792,7 @@ void initWebServer() {
   server.on("/save/power", HTTP_POST, handleSavePower);
   server.on("/power/config", HTTP_GET, handleGetPowerConfig);
   server.on("/power/stats",  HTTP_GET, handleGetPowerStats);
+  server.on("/power/control", HTTP_POST, handlePowerControl);
   server.on("/buzzer/test", HTTP_POST, handleBuzzerTest);
   server.on("/led/preview", HTTP_POST, handleLedPreview);
   server.on("/led/test",    HTTP_POST, handleLedTest);

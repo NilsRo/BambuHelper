@@ -191,12 +191,12 @@ static void pollOne(uint8_t i) {
 // ---------------------------------------------------------------------------
 //  Auto power-off
 // ---------------------------------------------------------------------------
-static bool sendPowerOff(uint8_t i) {
+static bool sendPowerCommand(uint8_t i, bool on) {
   TasmotaSettings& s = tasmotaSettings[i];
   if (s.ip[0] == '\0') return false;
 
   char url[64];
-  snprintf(url, sizeof(url), "http://%s/cm?cmnd=Power%%20Off", s.ip);
+  snprintf(url, sizeof(url), "http://%s/cm?cmnd=Power%%20%s", s.ip, on ? "On" : "Off");
 
   HTTPClient http;
   http.setTimeout(TASMOTA_TIMEOUT_MS);
@@ -205,11 +205,24 @@ static bool sendPowerOff(uint8_t i) {
   http.end();
 
   if (code == 200) {
-    Serial.printf("[Tasmota %u] Auto-off sent successfully\n", i);
+    Serial.printf("[Tasmota %u] Power %s sent successfully\n", i, on ? "On" : "Off");
     return true;
   }
-  Serial.printf("[Tasmota %u] Auto-off HTTP %d\n", i, code);
+  Serial.printf("[Tasmota %u] Power %s HTTP %d\n", i, on ? "On" : "Off", code);
   return false;
+}
+
+static bool sendPowerOff(uint8_t i) { return sendPowerCommand(i, false); }
+
+bool tasmotaSetPower(uint8_t plug, bool on) {
+  if (plug >= TASMOTA_PLUG_COUNT) return false;
+  if (!tasmotaSettings[plug].enabled) return false;
+  bool ok = sendPowerCommand(plug, on);
+  if (ok) {
+    // Force a fresh poll soon so stats reflect the new state.
+    g_rt[plug].nextPollMs = millis() + 500;
+  }
+  return ok;
 }
 
 static void evaluateAutoOff(uint8_t i) {
