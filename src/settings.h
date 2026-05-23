@@ -159,6 +159,7 @@ struct TasmotaSettings {
 #endif
   bool    autoOffEnabled;    // power off plug N minutes after FINISH and cooldown
   uint8_t autoOffDelayMin;   // minutes after FINISH (1-240)
+  bool    autoOffCancelOnDoor; // cancel this auto-off cycle if door opens while waiting
 };
 
 extern char wifiSSID[33];

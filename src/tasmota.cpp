@@ -232,6 +232,16 @@ static void evaluateAutoOff(uint8_t i) {
       g_rt[i].finishEnteredMs = now;
       Serial.printf("[Tasmota %u] FINISH detected on slot %u, auto-off timer armed\n", i, slot);
     }
+    // Door-open cancel: user is at the printer, abort this auto-off cycle.
+    // Latch via autoOffFired so we don't re-evaluate; new print resets both.
+    if (s.autoOffEnabled
+        && s.autoOffCancelOnDoor
+        && !g_rt[i].autoOffFired
+        && ps.doorSensorPresent
+        && ps.doorOpen) {
+      Serial.printf("[Tasmota %u] Auto-off cancelled: door opened on slot %u\n", i, slot);
+      g_rt[i].autoOffFired = true;
+    }
     uint32_t elapsedMin = (now - g_rt[i].finishEnteredMs) / 60000UL;
     if (s.autoOffEnabled
         && !g_rt[i].autoOffFired

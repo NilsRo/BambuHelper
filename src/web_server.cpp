@@ -866,6 +866,15 @@ R"rawliteral(
       <label for="tsm_ad" style="margin-top:10px">Auto-off delay (minutes)</label>
       <input type="number" id="tsm_ad" value="10" min="1" max="240" style="max-width:100px">
 
+      <div class="check-row" style="margin-top:12px">
+        <input type="checkbox" id="tsm_aod" value="1">
+        <label for="tsm_aod">Cancel auto-off if door is opened</label>
+      </div>
+      <p style="font-size:11px;color:#8B949E;margin-top:4px">
+        If the printer door opens during the delay, the auto-off is cancelled for this print (you are at the printer). A new print re-arms it.
+        <br>Ignored on printers without a door sensor (P1/A1).
+      </p>
+
       <hr style="border:none;border-top:1px solid #30363d;margin:14px 0">
       <div style="font-size:13px;color:#C9D1D9">
         <div style="margin-bottom:6px"><strong>Stats</strong> <span id="ptStatusDot" style="font-size:11px;color:#8B949E">(offline)</span></div>
@@ -1339,6 +1348,7 @@ function selectPowerTab(plug){
     document.getElementById('tsm_pi').value    = d.pollInterval || 10;
     document.getElementById('tsm_ao').checked  = !!d.autoOffEnabled;
     document.getElementById('tsm_ad').value    = d.autoOffDelayMin || 10;
+    document.getElementById('tsm_aod').checked = !!d.autoOffCancelOnDoor;
     if (typeof d.tariff === 'number') document.getElementById('tsm_tar').value = d.tariff;
     if (typeof d.currency === 'string') document.getElementById('tsm_cur').value = d.currency;
     refreshPowerStats();
@@ -1374,6 +1384,7 @@ function savePower(){
   p.append('tsm_pi',  document.getElementById('tsm_pi').value);
   p.append('tsm_ao',  document.getElementById('tsm_ao').checked ? '1' : '0');
   p.append('tsm_ad',  document.getElementById('tsm_ad').value);
+  p.append('tsm_aod', document.getElementById('tsm_aod').checked ? '1' : '0');
   p.append('tsm_tar', document.getElementById('tsm_tar').value);
   p.append('tsm_cur', document.getElementById('tsm_cur').value);
   var slotSel = document.getElementById('tsm_slot');
@@ -2957,9 +2968,10 @@ static void handleGetPowerConfig() {
   doc["ip"]              = s.ip;
   doc["displayMode"]     = s.displayMode;
   doc["pollInterval"]    = s.pollInterval;
-  doc["autoOffEnabled"]  = s.autoOffEnabled;
-  doc["autoOffDelayMin"] = s.autoOffDelayMin;
-  doc["tariff"]          = tasmotaTariffPerKwh;   // global
+  doc["autoOffEnabled"]      = s.autoOffEnabled;
+  doc["autoOffDelayMin"]     = s.autoOffDelayMin;
+  doc["autoOffCancelOnDoor"] = s.autoOffCancelOnDoor;
+  doc["tariff"]              = tasmotaTariffPerKwh;   // global
   doc["currency"]        = tasmotaCurrency;       // global
 #if TASMOTA_PLUG_COUNT == 1
   doc["assignedSlot"]    = s.assignedSlot;
@@ -3019,6 +3031,7 @@ static void handleSavePower() {
     int ad = server.arg("tsm_ad").toInt();
     s.autoOffDelayMin = (ad >= 1 && ad <= 240) ? (uint8_t)ad : 10;
   }
+  if (server.hasArg("tsm_aod")) s.autoOffCancelOnDoor = (server.arg("tsm_aod").toInt() != 0);
 #if TASMOTA_PLUG_COUNT == 1
   if (server.hasArg("tsm_slot")) {
     int slot = server.arg("tsm_slot").toInt();
@@ -3166,8 +3179,9 @@ static void handleSettingsExport() {
     p["ip"]              = tasmotaSettings[i].ip;
     p["displayMode"]     = tasmotaSettings[i].displayMode;
     p["pollInterval"]    = tasmotaSettings[i].pollInterval;
-    p["autoOffEnabled"]  = tasmotaSettings[i].autoOffEnabled;
-    p["autoOffDelayMin"] = tasmotaSettings[i].autoOffDelayMin;
+    p["autoOffEnabled"]      = tasmotaSettings[i].autoOffEnabled;
+    p["autoOffDelayMin"]     = tasmotaSettings[i].autoOffDelayMin;
+    p["autoOffCancelOnDoor"] = tasmotaSettings[i].autoOffCancelOnDoor;
 #if TASMOTA_PLUG_COUNT == 1
     p["assignedSlot"]    = tasmotaSettings[i].assignedSlot;
 #endif
@@ -3469,6 +3483,7 @@ static void handleSettingsImportFinish() {
         if (ad < 1 || ad > 240) ad = 10;
         s.autoOffDelayMin = ad;
       }
+      if (p["autoOffCancelOnDoor"].is<bool>()) s.autoOffCancelOnDoor = p["autoOffCancelOnDoor"].as<bool>();
 #if TASMOTA_PLUG_COUNT == 1
       if (p["assignedSlot"].is<uint8_t>()) {
         uint8_t a = p["assignedSlot"].as<uint8_t>();

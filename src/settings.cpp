@@ -470,6 +470,7 @@ void loadSettings() {
       if (ad < 1 || ad > 240) ad = 10;
       tasmotaSettings[i].autoOffDelayMin = ad;
     }
+    snprintf(k, sizeof(k), "tsm%u_aod", i); tasmotaSettings[i].autoOffCancelOnDoor = prefs.getBool(k, false);
 #if TASMOTA_PLUG_COUNT == 1
     snprintf(k, sizeof(k), "tsm%u_as",  i); {
       uint8_t a = prefs.getUChar(k, 255);
@@ -573,6 +574,7 @@ void saveSettings() {
     snprintf(k, sizeof(k), "tsm%u_dm",  i); prefs.putUChar(k, tasmotaSettings[i].displayMode);
     snprintf(k, sizeof(k), "tsm%u_pi",  i); prefs.putUChar(k, pi);
     snprintf(k, sizeof(k), "tsm%u_ao",  i); prefs.putBool(k, tasmotaSettings[i].autoOffEnabled);
+    snprintf(k, sizeof(k), "tsm%u_aod", i); prefs.putBool(k, tasmotaSettings[i].autoOffCancelOnDoor);
     snprintf(k, sizeof(k), "tsm%u_ad",  i); prefs.putUChar(k, ad);
 #if TASMOTA_PLUG_COUNT == 1
     uint8_t a = tasmotaSettings[i].assignedSlot;
