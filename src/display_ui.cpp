@@ -2795,6 +2795,21 @@ static void drawPrinting() {
       for (uint8_t i = 0; i < GAUGE_SLOT_COUNT; i++) prevSlotTypes[i] = 0xFF;
       prevSlotRotation = dispSettings.rotation;
     }
+    // Labels for GAUGE_CHAMBER_FAN (Chamber vs Exhaust) and GAUGE_AUX_FAN (Aux vs
+    // L.Aux) depend on s.airductFuncs, which starts at 0 and gets bits OR'd in
+    // once the first pushall with device.airduct.parts lands. The slot cache
+    // skips redraws when the type hasn't changed, so without this invalidation
+    // the initial "Chamber"/"Aux" labels drawn on boot would stick forever
+    // even after the bitmask updates. Force a redraw for those slots when the
+    // mask changes (typically once per session, on the first pushall).
+    static uint32_t prevAirductFuncs = 0;
+    if (prevAirductFuncs != s.airductFuncs) {
+      for (uint8_t i = 0; i < GAUGE_SLOT_COUNT; i++) {
+        uint8_t gtPrev = p.config.gaugeSlots[i];
+        if (gtPrev == GAUGE_CHAMBER_FAN || gtPrev == GAUGE_AUX_FAN) prevSlotTypes[i] = 0xFF;
+      }
+      prevAirductFuncs = s.airductFuncs;
+    }
 
     for (uint8_t si = 0; si < GAUGE_SLOT_COUNT; si++) {
       // Skip row-2 slots when AMS view replaces them. Mark prevSlotTypes as
@@ -2904,7 +2919,13 @@ static void drawPrinting() {
                        &dispSettings.auxFanRight, smoothAuxRightFan);
           break;
         case GAUGE_CHAMBER_FAN:
-          drawFanGauge(tft, cx, cy, gR, s.chamberFanPct, dispSettings.chamberFan.arc, "Chamber", fr,
+          // big_fan2_speed -> chamberFanPct mapping is shared across all models, but on
+          // airduct printers that report func=2 (H2C/X2D) the same legacy field actually
+          // carries the EXHAUST fan value, not a chamber fan. Relabel the gauge so the
+          // displayed name matches reality on those models. X1C/P/A and other non-airduct
+          // models keep the "Chamber" label that matches Bambu's own UI terminology.
+          drawFanGauge(tft, cx, cy, gR, s.chamberFanPct, dispSettings.chamberFan.arc,
+                       (s.airductFuncs & (1u << 2)) ? "Exhaust" : "Chamber", fr,
                        &dispSettings.chamberFan, smoothChamberFan);
           break;
         case GAUGE_EXHAUST_FAN:
