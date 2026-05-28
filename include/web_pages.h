@@ -78,7 +78,7 @@ function saveWifi(){
 //    Display:  bright, nighten, nstart, nend, nbright, ssbright, afterprint,
 //              fmins, dack, kps, pong, abar, slbl, shtire, fanmp, invcol,
 //              cydcls, rotation, tz, use24h, datefmt, clk_time, clk_date,
-//              clk_size, clk_hidedate, clr_bg, clr_track, bulk_a/l/v,
+//              clk_size, clk_hidedate, clr_bg, clr_track, clr_pbar, bulk_a/l/v,
 //              prg/noz/bed/pfn/afn/afr/cfn/exh/cht/hbk + _a/_l/_v
 //    Hardware: rotmode, rotinterval, btntype, btnpin, buzzen (DOUBLE Z!),
 //              buzpin, buzqs, buzqe, buzclick, buzbeden, buzbedtemp, leden,
@@ -976,6 +976,7 @@ html[data-theme="dark"] .topbar::after { opacity: 0.5; }
       <div class="bulk-color-row">
         <label for="clr_bg"><span>Background</span><input type="color" id="clr_bg" value="%CLR_BG%"></label>
         <label for="clr_track"><span>Track</span><input type="color" id="clr_track" value="%CLR_TRACK%"></label>
+        <label for="clr_pbar"><span>Progress Bar</span><input type="color" id="clr_pbar" value="%CLR_PBAR%"></label>
       </div>
 
       <details>
@@ -1942,6 +1943,7 @@ function applyTheme(name){
   var t = themes[name]; if (!t) return;
   document.getElementById('clr_bg').value = t.bg;
   document.getElementById('clr_track').value = t.track;
+  document.getElementById('clr_pbar').value = t.prg.a;
   document.getElementById('clk_time').value = t.clkt;
   document.getElementById('clk_date').value = t.clkd;
   for (var i = 0; i < GAUGE_KEYS.length; i++){
@@ -1966,6 +1968,7 @@ function resetGaugeColors(){
     document.getElementById(k + '_l').value = c.l;
     document.getElementById(k + '_v').value = c.v;
   }
+  document.getElementById('clr_pbar').value = document.getElementById('prg_a').value;
   applyDisplay();
 }
 function randomGaugeColors(){
@@ -1976,6 +1979,10 @@ function randomGaugeColors(){
     document.getElementById(GAUGE_KEYS[i] + '_l').value = hex;
     document.getElementById(GAUGE_KEYS[i] + '_v').value = '#FFFFFF';
   }
+  // Give the progress bar its own hue, kept 60-300 deg from the Progress gauge
+  // so it never matches the first gauge.
+  var pbarH = (baseH + 60 + Math.floor(Math.random() * 240)) % 360;
+  document.getElementById('clr_pbar').value = hslToHex(pbarH, 70, 55);
   applyDisplay();
 }
 function hslToHex(h, s, l){
@@ -2012,6 +2019,7 @@ function applyDisplay(){
   p.append('datefmt', document.getElementById('datefmt').value);
   p.append('clr_bg', document.getElementById('clr_bg').value);
   p.append('clr_track', document.getElementById('clr_track').value);
+  p.append('clr_pbar', document.getElementById('clr_pbar').value);
   p.append('clk_time', document.getElementById('clk_time').value);
   p.append('clk_date', document.getElementById('clk_date').value);
   p.append('clk_size', document.getElementById('clk_size').value);

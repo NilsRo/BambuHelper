@@ -77,6 +77,7 @@ static void readDisplayFromForm() {
   }
   if (server.hasArg("clr_bg"))    dispSettings.bgColor = htmlToRgb565(server.arg("clr_bg").c_str());
   if (server.hasArg("clr_track")) dispSettings.trackColor = htmlToRgb565(server.arg("clr_track").c_str());
+  if (server.hasArg("clr_pbar"))  dispSettings.progressBarColor = htmlToRgb565(server.arg("clr_pbar").c_str());
   if (server.hasArg("clk_time"))  dispSettings.clockTimeColor = htmlToRgb565(server.arg("clk_time").c_str());
   if (server.hasArg("clk_date"))  dispSettings.clockDateColor = htmlToRgb565(server.arg("clk_date").c_str());
   if (server.hasArg("clk_size")) {
@@ -861,6 +862,7 @@ static void handleSettingsExport() {
   disp["rotation"] = dispSettings.rotation;
   rgb565ToHtml(dispSettings.bgColor, buf);    disp["bgColor"] = String(buf);
   rgb565ToHtml(dispSettings.trackColor, buf); disp["trackColor"] = String(buf);
+  rgb565ToHtml(dispSettings.progressBarColor, buf); disp["progressBarColor"] = String(buf);
   rgb565ToHtml(dispSettings.clockTimeColor, buf); disp["clockTimeColor"] = String(buf);
   rgb565ToHtml(dispSettings.clockDateColor, buf); disp["clockDateColor"] = String(buf);
   disp["clockTimeSize"] = dispSettings.clockTimeSize;
@@ -1085,6 +1087,7 @@ static void handleSettingsImportFinish() {
     if (disp["rotation"].is<uint8_t>())   dispSettings.rotation = disp["rotation"].as<uint8_t>();
     if (disp["bgColor"].is<const char*>())    dispSettings.bgColor = htmlToRgb565(disp["bgColor"]);
     if (disp["trackColor"].is<const char*>()) dispSettings.trackColor = htmlToRgb565(disp["trackColor"]);
+    if (disp["progressBarColor"].is<const char*>()) dispSettings.progressBarColor = htmlToRgb565(disp["progressBarColor"]);
     if (disp["clockTimeColor"].is<const char*>()) dispSettings.clockTimeColor = htmlToRgb565(disp["clockTimeColor"]);
     if (disp["clockDateColor"].is<const char*>()) dispSettings.clockDateColor = htmlToRgb565(disp["clockDateColor"]);
     if (disp["clockTimeSize"].is<int>()) {

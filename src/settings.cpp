@@ -127,6 +127,7 @@ void defaultDisplaySettings(DisplaySettings& ds) {
   ds.rotation = 0;
   ds.bgColor = CLR_BG;
   ds.trackColor = CLR_TRACK;
+  ds.progressBarColor = CLR_GREEN;
   ds.animatedBar = true;
   ds.pongClock = false;
   ds.smallLabels = false;
@@ -310,6 +311,15 @@ void loadSettings() {
   loadGaugeColors("gc_exh", dispSettings.exhaustFan, def.exhaustFan);
   loadGaugeColors("gc_cht", dispSettings.chamberTemp, def.chamberTemp);
   loadGaugeColors("gc_hbk", dispSettings.heatbreak, def.heatbreak);
+
+  // Top progress bar color. Before this setting existed the bar reused the
+  // Progress gauge arc color, so migrate absent keys to that value to avoid a
+  // visible color change for users who had customized the progress arc.
+  if (prefs.isKey("dsp_pbar")) {
+    dispSettings.progressBarColor = prefs.getUShort("dsp_pbar", def.progressBarColor);
+  } else {
+    dispSettings.progressBarColor = dispSettings.progress.arc;
+  }
 
   // Network settings
   netSettings.useDHCP = prefs.getBool("net_dhcp", true);
@@ -512,6 +522,7 @@ void saveSettings() {
   prefs.putUChar("dsp_rot", dispSettings.rotation);
   prefs.putUShort("dsp_bg", dispSettings.bgColor);
   prefs.putUShort("dsp_trk", dispSettings.trackColor);
+  prefs.putUShort("dsp_pbar", dispSettings.progressBarColor);
   prefs.putBool("dsp_abar", dispSettings.animatedBar);
   prefs.putBool("dsp_pong", dispSettings.pongClock);
   prefs.putBool("dsp_slbl", dispSettings.smallLabels);

@@ -48,6 +48,7 @@ struct DisplaySettings {
   uint8_t  rotation;       // 0, 1, 2, 3 (x90 degrees)
   uint16_t bgColor;        // background color
   uint16_t trackColor;     // inactive arc track color
+  uint16_t progressBarColor; // top LED progress bar fill color (independent of Progress gauge arc)
   bool     animatedBar;       // shimmer effect on progress bar
   bool     pongClock;         // Pong/Breakout animated clock
   bool     smallLabels;       // use smaller gauge labels (Font 1 instead of Font 2)

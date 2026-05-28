@@ -225,6 +225,7 @@ static bool resolvePlaceholder(const char* name, String& out) {
   // --- Colors (global + per-gauge) ---
   if (strcmp(name, "CLR_BG") == 0)    { rgb565ToHtml(dispSettings.bgColor, buf); out = buf; return true; }
   if (strcmp(name, "CLR_TRACK") == 0) { rgb565ToHtml(dispSettings.trackColor, buf); out = buf; return true; }
+  if (strcmp(name, "CLR_PBAR") == 0)  { rgb565ToHtml(dispSettings.progressBarColor, buf); out = buf; return true; }
   if (strcmp(name, "CLK_TIME") == 0)  { rgb565ToHtml(dispSettings.clockTimeColor, buf); out = buf; return true; }
   if (strcmp(name, "CLK_DATE") == 0)  { rgb565ToHtml(dispSettings.clockDateColor, buf); out = buf; return true; }
   {

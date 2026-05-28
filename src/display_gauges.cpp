@@ -66,7 +66,7 @@ void drawLedProgressBar(lgfx::LovyanGFX& gfx, int16_t y, uint8_t progress) {
   int16_t fillW = (progress * barW) / 100;
   if (fillW < 1) fillW = 1;
 
-  uint16_t barColor = dispSettings.progress.arc;
+  uint16_t barColor = dispSettings.progressBarColor;
 
   gfx.fillRoundRect(barX, y, fillW, barH, 2, barColor);
 
@@ -123,7 +123,7 @@ void tickProgressShimmer(lgfx::LovyanGFX& gfx, int16_t y, uint8_t progress, bool
   int16_t fillW = (progress * barW) / 100;
   if (fillW < SHIMMER_W + 4) return;  // too small for shimmer
 
-  uint16_t barColor = dispSettings.progress.arc;
+  uint16_t barColor = dispSettings.progressBarColor;
 
   ScopedWrite sw_(gfx);
 
