@@ -2220,6 +2220,10 @@ static void drawAmsStrip(const AmsState& ams,
   tft.fillRect(0, zoneY, LY_W, zoneH + 7, CLR_BG);
   if (units == 0 || units > AMS_MAX_UNITS) return;
 
+  // A lone AMS unit doesn't need an "AMS A" caption - drop it and grow the
+  // bars into the reclaimed band (portrait only; landscape is drawAmsZone).
+  const bool singleAms = (units == 1);
+
   const int16_t usableW = LY_W - 2 * LY_AMS_MARGIN;
 
   // For 1-AMS enhanced view there's ~114px of horizontal slack, so widen the
@@ -2243,15 +2247,27 @@ static void drawAmsStrip(const AmsState& ams,
   //   extras:   bars anchored at zoneY; filament-type row (font1) 3px below
   //             bars; AMS label (font2, same as default) a couple pixels lower
   //             so it reads as "label" rather than "caption".
-  int16_t barY, typeY, labelY;
+  int16_t barY, typeY = 0, labelY = 0;
   if (showFilamentTypes) {
-    barY   = zoneY;
-    typeY  = barY + barH + 3;   // 2px lower than before so names breathe off the bar
-    labelY = typeY + 13;        // 8px font1 type row + 5px gap before font2 label
+    barY = zoneY;
+    if (singleAms) {
+      // Lone unit: no "AMS A" caption - bars + type row fill the zone.
+      barH  = zoneH - 3 - 11;     // 3px gap + ~11px filament-type row
+      typeY = barY + barH + 3;
+    } else {
+      typeY  = barY + barH + 3;   // 2px lower than before so names breathe off the bar
+      labelY = typeY + 13;        // 8px font1 type row + 5px gap before font2 label
+    }
   } else {
-    barY   = zoneY + (zoneH - barH - LY_AMS_LABEL_OFFY - 8) / 2;
-    labelY = barY + barH + LY_AMS_LABEL_OFFY;
-    typeY  = 0;  // unused
+    if (singleAms) {
+      // Lone unit: no "AMS A" caption - bars own the whole zone (2px top pad
+      // leaves room for the active-tray notch).
+      barY = zoneY + 2;
+      barH = zoneH - 4;
+    } else {
+      barY   = zoneY + (zoneH - barH - LY_AMS_LABEL_OFFY - 8) / 2;
+      labelY = barY + barH + LY_AMS_LABEL_OFFY;
+    }
   }
 
   for (uint8_t u = 0; u < units; u++) {
@@ -2288,13 +2304,15 @@ static void drawAmsStrip(const AmsState& ams,
       }
     }
 
-    char label[6];
-    snprintf(label, sizeof(label), "AMS %c", 'A' + u);
-    tft.setTextDatum(TC_DATUM);
-    bool sm = dispSettings.smallLabels;
-    setFont(tft, sm ? FONT_SMALL : FONT_BODY);
-    tft.setTextColor(CLR_TEXT_DIM, CLR_BG);
-    tft.drawString(label, groupX + groupW / 2, labelY + (showFilamentTypes ? 0 : 2));
+    if (!singleAms) {
+      char label[6];
+      snprintf(label, sizeof(label), "AMS %c", 'A' + u);
+      tft.setTextDatum(TC_DATUM);
+      bool sm = dispSettings.smallLabels;
+      setFont(tft, sm ? FONT_SMALL : FONT_BODY);
+      tft.setTextColor(CLR_TEXT_DIM, CLR_BG);
+      tft.drawString(label, groupX + groupW / 2, labelY + (showFilamentTypes ? 0 : 2));
+    }
   }
 }
 
