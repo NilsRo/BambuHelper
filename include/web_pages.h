@@ -634,6 +634,7 @@ html[data-theme="dark"] .topbar::after { opacity: 0.5; }
   <button class="nav-item" type="button" data-section="printer" aria-current="true"><span>Printer</span></button>
   <button class="nav-item" type="button" data-section="display"><span>Display</span></button>
   <button class="nav-item" type="button" data-section="hardware"><span>Hardware</span></button>
+  <button class="nav-item" type="button" data-section="advanced"><span>Advanced</span></button>
   <h4>Network</h4>
   <button class="nav-item" type="button" data-section="wifi"><span>WiFi &amp; System</span></button>
   <button class="nav-item" type="button" data-section="power"><span>Power</span></button>
@@ -776,9 +777,9 @@ html[data-theme="dark"] .topbar::after { opacity: 0.5; }
     <div class="card-head">
       <div>
         <h3>Gauge Layout</h3>
-        <p>Six display slots, configured per printer. Set any slot to <em>Empty</em> to hide it.</p>
+        <p>Per-printer display slots. The standard 2x3 grid is always shown. On 240x320 and 320x480 boards the extra rows below only render when the matching grid mode (<em>Landscape 8 slots</em> / <em>Portrait 9 slots</em>) is enabled under <strong>Advanced</strong>. Set any slot to <em>Empty</em> to hide it.</p>
       </div>
-      <button type="button" class="btn btn-ghost btn-sm" onclick="resetGaugeLayout()">Reset to default</button>
+      <button type="button" class="btn btn-ghost btn-sm" style="white-space:nowrap" onclick="resetGaugeLayout()">Reset to default</button>
     </div>
 %AMSV_ROW%
     <div class="row-divider" style="margin-top:var(--sp-3)">&#9650; Top row</div>
@@ -795,6 +796,7 @@ html[data-theme="dark"] .topbar::after { opacity: 0.5; }
         <div class="cell"><label>Bot-right</label><select id="gs5" class="gauge-slot-sel"></select></div>
       </div>
     </div>
+%EXTRAS_SECTIONS%
     <div class="action-bar">
       <button type="button" class="btn btn-primary" onclick="saveGaugeLayout()">Save Gauge Layout</button>
     </div>
@@ -1150,7 +1152,6 @@ html[data-theme="dark"] .topbar::after { opacity: 0.5; }
   </div>
 
 %BAT_TOGGLE_ROW%
-%DUALP_ADVANCED%
 
   <div class="card">
     <div class="card-head">
@@ -1173,7 +1174,33 @@ html[data-theme="dark"] .topbar::after { opacity: 0.5; }
   </div>
 </div>
 
-<!-- ===== Section 4: WiFi & System ===== -->
+<!-- ===== Section 4: Advanced ===== -->
+<div class="section" id="sec-advanced" hidden>
+  <div class="section-intro">
+    <h2>Advanced</h2>
+    <p>Extended display layouts and operations that need extra care. Most users do not need anything here.</p>
+  </div>
+
+%EXTENDED_MODES_CARD%
+
+  <div class="card" style="border-color:rgba(220, 69, 56, 0.30)">
+    <div class="card-head"><div><h3 style="color:var(--danger)">Danger zone</h3><p>Destructive operations and experimental settings. Unlock to reveal.</p></div></div>
+    <label class="check-row">
+      <input type="checkbox" id="dangerUnlock" onchange="toggleDangerUnlock(this.checked)">
+      <label for="dangerUnlock">Show advanced operations</label>
+    </label>
+    <div id="dangerOps" style="display:none;margin-top:var(--sp-3)">
+%DUALP_ADVANCED%
+      <div class="hstack" style="gap:var(--sp-2);flex-wrap:wrap;margin-top:var(--sp-3)">
+        <button type="button" class="btn btn-ghost" onclick="rebootDevice()">Reboot</button>
+        <button type="button" class="btn btn-danger" onclick="factoryReset()">Factory Reset...</button>
+      </div>
+      <p class="hint" style="margin-top:var(--sp-2)">Reboot does not change settings. Factory reset wipes WiFi, printers, gauge layout, everything.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Section 5: WiFi & System ===== -->
 <div class="section" id="sec-wifi" hidden>
   <div class="section-intro">
     <h2>WiFi &amp; System</h2>
@@ -1312,16 +1339,10 @@ R"rawliteral(
 R"rawliteral(
   </div>
 
-  <div class="card" style="border-color:rgba(220, 69, 56, 0.30)">
-    <div class="card-head"><div><h3 style="color:var(--danger)">Danger zone</h3><p>Reboot does not change settings. Factory reset wipes WiFi, printers, gauge layout, everything.</p></div></div>
-    <div class="hstack" style="gap:var(--sp-2);flex-wrap:wrap">
-      <button type="button" class="btn btn-ghost" onclick="rebootDevice()">Reboot</button>
-      <button type="button" class="btn btn-danger" onclick="factoryReset()">Factory Reset...</button>
-    </div>
-  </div>
+  <p class="hint" style="margin-top:var(--sp-3)">Reboot and factory reset have moved to the <strong>Advanced</strong> section.</p>
 </div>
 
-<!-- ===== Section 5: Power Monitoring ===== -->
+<!-- ===== Section 6: Power Monitoring ===== -->
 <div class="section" id="sec-power" hidden>
   <div class="section-intro">
     <h2>Power Monitoring</h2>
@@ -1441,6 +1462,7 @@ var SECTION_LABELS = {
   printer: 'Printer Settings',
   display: 'Display',
   hardware: 'Hardware',
+  advanced: 'Advanced',
   wifi: 'WiFi & System',
   power: 'Power Monitoring',
   diag: 'Diagnostics'
@@ -1535,16 +1557,40 @@ function stopPolling(){
 var _brightTimer = null;
 function sendBrightness(val){ clearTimeout(_brightTimer); _brightTimer = setTimeout(function(){ fetch('/brightness?val=' + val); }, 150); }
 
-/* ============ Gauge slot type labels (must match GaugeType enum in settings.h) ============ */
+/* ============ Gauge slot type labels (must match GaugeType enum in settings.h) ============
+   Array index = numeric gauge ID. Empty `group` renders ungrouped at the top
+   of the dropdown; named groups render as <optgroup> blocks in the order the
+   first member of each group appears below. */
 var gaugeTypes = [
-  '-- Empty --','Progress','Nozzle Temp','Bed Temp',
-  'Part Fan','Aux Fan','Chamber Fan','Chamber Temp',
-  'Heatbreak Fan','Clock',
-  'AMS 1 Humidity','AMS 2 Humidity','AMS 3 Humidity','AMS 4 Humidity',
-  'Layer Progress',
-  'AMS 1 Temp','AMS 2 Temp','AMS 3 Temp','AMS 4 Temp',
-  'AMS 1 Filament','AMS 2 Filament','AMS 3 Filament','AMS 4 Filament',
-  'Aux Fan Right (X2D)','Exhaust Fan'
+  {name:'-- Empty --',        group:''},                  /*  0 */
+  {name:'Progress',           group:'Print status'},      /*  1 */
+  {name:'Nozzle Temp',        group:'Temperatures'},      /*  2 */
+  {name:'Bed Temp',           group:'Temperatures'},      /*  3 */
+  {name:'Part Fan',           group:'Fans'},              /*  4 */
+  {name:'Aux Fan',            group:'Fans'},              /*  5 */
+  {name:'Chamber Fan',        group:'Fans'},              /*  6 */
+  {name:'Chamber Temp',       group:'Temperatures'},      /*  7 */
+  {name:'Heatbreak Fan',      group:'Fans'},              /*  8 */
+  {name:'Clock',              group:'Other'},             /*  9 */
+  {name:'AMS 1 Humidity',     group:'AMS humidity'},      /* 10 */
+  {name:'AMS 2 Humidity',     group:'AMS humidity'},      /* 11 */
+  {name:'AMS 3 Humidity',     group:'AMS humidity'},      /* 12 */
+  {name:'AMS 4 Humidity',     group:'AMS humidity'},      /* 13 */
+  {name:'Layer Progress',     group:'Print status'},      /* 14 */
+  {name:'AMS 1 Temp',         group:'AMS temperature'},   /* 15 */
+  {name:'AMS 2 Temp',         group:'AMS temperature'},   /* 16 */
+  {name:'AMS 3 Temp',         group:'AMS temperature'},   /* 17 */
+  {name:'AMS 4 Temp',         group:'AMS temperature'},   /* 18 */
+  {name:'AMS 1 Filament',     group:'AMS filament (quad)'},/* 19 */
+  {name:'AMS 2 Filament',     group:'AMS filament (quad)'},/* 20 */
+  {name:'AMS 3 Filament',     group:'AMS filament (quad)'},/* 21 */
+  {name:'AMS 4 Filament',     group:'AMS filament (quad)'},/* 22 */
+  {name:'Aux Fan Right (X2D)',group:'Fans'},              /* 23 */
+  {name:'Exhaust Fan',        group:'Fans'},              /* 24 */
+  {name:'AMS 1 Bars',         group:'AMS filament (bars)'},/* 25 */
+  {name:'AMS 2 Bars',         group:'AMS filament (bars)'},/* 26 */
+  {name:'AMS 3 Bars',         group:'AMS filament (bars)'},/* 27 */
+  {name:'AMS 4 Bars',         group:'AMS filament (bars)'} /* 28 */
 ];
 var GAUGE_REQUIRES = { 23: 'hasAuxFanRight', 24: 'hasExhaustFan' };
 var gaugeCaps = {}, persistedGauges = {};
@@ -1555,15 +1601,35 @@ function gaugeAllowed(idx){
   return true;
 }
 function rebuildGaugeOptions(){
+  // Build ungrouped + groups once, then clone into each <select>.
+  // groups[] preserves first-seen order; groupMembers[g] is a list of {i, name}.
+  var ungrouped = [];
+  var groups = [];
+  var groupMembers = {};
+  gaugeTypes.forEach(function(gt, i){
+    if (!gaugeAllowed(i)) return;
+    if (!gt.group) { ungrouped.push({i:i, name:gt.name}); return; }
+    if (!groupMembers[gt.group]) { groups.push(gt.group); groupMembers[gt.group] = []; }
+    groupMembers[gt.group].push({i:i, name:gt.name});
+  });
   var sels = document.querySelectorAll('.gauge-slot-sel');
   sels.forEach(function(sel){
     var cur = sel.value;
     sel.innerHTML = '';
-    gaugeTypes.forEach(function(name, i){
-      if (!gaugeAllowed(i)) return;
+    ungrouped.forEach(function(e){
       var o = document.createElement('option');
-      o.value = i; o.textContent = name;
+      o.value = e.i; o.textContent = e.name;
       sel.appendChild(o);
+    });
+    groups.forEach(function(g){
+      var og = document.createElement('optgroup');
+      og.label = g;
+      groupMembers[g].forEach(function(e){
+        var o = document.createElement('option');
+        o.value = e.i; o.textContent = e.name;
+        og.appendChild(o);
+      });
+      sel.appendChild(og);
     });
     if (cur !== '') sel.value = cur;
   });
@@ -1580,9 +1646,12 @@ function refreshGaugeCaps(){
       if (v !== !!gaugeCaps[capName]){ gaugeCaps[capName] = v; changed = true; }
     });
     arr.forEach(function(d){
-      if (!d || !d.gaugeSlots) return;
-      d.gaugeSlots.forEach(function(v){
-        if (!persistedGauges[v]) { persistedGauges[v] = true; changed = true; }
+      if (!d) return;
+      ['gaugeSlots','landscapeExtras','portraitExtras'].forEach(function(key){
+        if (!Array.isArray(d[key])) return;
+        d[key].forEach(function(v){
+          if (!persistedGauges[v]) { persistedGauges[v] = true; changed = true; }
+        });
       });
     });
     if (changed) rebuildGaugeOptions();
@@ -1591,14 +1660,21 @@ function refreshGaugeCaps(){
 refreshGaugeCaps();
 
 function resetGaugeLayout(){
+  // Standard 2x3 grid -> Progress/Nozzle/Bed/PartFan/AuxFan/ChamberFan.
+  // Both extras arrays default to Empty (user opts in via mode toggles).
   var d = [1,2,3,4,5,6];
   for (var i = 0; i < 6; i++) { var s = document.getElementById('gs' + i); if (s) s.value = d[i]; }
+  var lx = ['lx0','lx1'], px = ['px0','px1','px2'];
+  lx.forEach(function(id){ var s = document.getElementById(id); if (s) s.value = 0; });
+  px.forEach(function(id){ var s = document.getElementById(id); if (s) s.value = 0; });
   showToast('Restored layout defaults');
 }
 function saveGaugeLayout(){
   var p = new URLSearchParams();
   p.append('slot', currentSlot);
   for (var g = 0; g < 6; g++) { var s = document.getElementById('gs' + g); if (s) p.append('gs' + g, s.value); }
+  for (var g = 0; g < 2; g++) { var s = document.getElementById('lx' + g); if (s) p.append('lx' + g, s.value); }
+  for (var g = 0; g < 3; g++) { var s = document.getElementById('px' + g); if (s) p.append('px' + g, s.value); }
   var av = document.getElementById('amsv');
   if (av && av.checked) p.append('amsv', '1');
   fetch('/save/gaugelayout',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:p.toString()})
@@ -1637,6 +1713,8 @@ function selectPrinterTab(slot){
     }
     if (capsChanged) rebuildGaugeOptions();
     if (d.gaugeSlots) { for (var g = 0; g < 6; g++) { var sel = document.getElementById('gs' + g); if (sel) sel.value = d.gaugeSlots[g] || 0; } }
+    if (d.landscapeExtras) { for (var g = 0; g < 2; g++) { var sel = document.getElementById('lx' + g); if (sel) sel.value = d.landscapeExtras[g] || 0; } }
+    if (d.portraitExtras)  { for (var g = 0; g < 3; g++) { var sel = document.getElementById('px' + g); if (sel) sel.value = d.portraitExtras[g] || 0; } }
     var av = document.getElementById('amsv');
     if (av) { av.checked = !!d.amsView; syncAmsView(); }
     toggleConnMode();
@@ -2048,6 +2126,19 @@ function toggleDualPrinterMode(on){
   var d = document.getElementById('topStatusDot1');
   if (d) d.style.display = on ? '' : 'none';
   if (!on) selectPrinterTab(0);
+}
+/* Toggle a grid mode (l8s / p9s) and sync the matching Gauge Layout extras
+   block in the Printer section. Hides the extra dropdowns when the user
+   doesn't have the mode enabled so the layout card stays compact. */
+function toggleGridMode(key, on){
+  toggleSetting(key, on);
+  var elId = (key === 'l8s') ? 'landExtrasGroup' : 'portExtrasGroup';
+  var el = document.getElementById(elId);
+  if (el) el.style.display = on ? '' : 'none';
+}
+function toggleDangerUnlock(on){
+  var ops = document.getElementById('dangerOps');
+  if (ops) ops.style.display = on ? '' : 'none';
 }
 
 /* ============ Diagnostics ============ */

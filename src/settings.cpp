@@ -135,6 +135,8 @@ void defaultDisplaySettings(DisplaySettings& ds) {
   ds.fanMatchPrinter = true;
   ds.invertColors = false;
   ds.cydPanelClassic = false;
+  ds.landscape8Slots = false;
+  ds.portrait9Slots = false;
   ds.clockTimeColor = CLR_TEXT;
   ds.clockDateColor = CLR_TEXT_DIM;
   ds.clockTimeSize = 0;        // Auto
@@ -163,7 +165,7 @@ void defaultDisplaySettings(DisplaySettings& ds) {
   ds.heatbreak = { CLR_ORANGE, CLR_ORANGE, CLR_TEXT };
 }
 
-// Default gauge slot layout: Progress, Nozzle, Bed, Part Fan, Aux Fan, Chamber Fan
+// Default standard 2x3 grid: Progress, Nozzle, Bed, Part Fan, Aux Fan, Chamber Fan.
 static void defaultGaugeSlots(uint8_t* slots) {
   slots[0] = GAUGE_PROGRESS;
   slots[1] = GAUGE_NOZZLE;
@@ -239,19 +241,38 @@ void loadSettings() {
     snprintf(key, sizeof(key), "p%d_region", i);
     cfg.region = (CloudRegion)prefs.getUChar(key, REGION_US);
 
-    // Gauge slot layout (per-printer)
+    // Gauge slot layout (per-printer). 3 NVS keys:
+    //   p%d_slots - standard 2x3 (6 bytes, always present after first save)
+    //   p%d_lext  - landscape extras (2 bytes, only after enabling 8-slot mode)
+    //   p%d_pext  - portrait  extras (3 bytes, only after enabling 9-slot mode)
+    // Missing keys -> EMPTY. Legacy 8/9-byte records from the in-development
+    // 'shared extras' branch read as 6-byte standard slots (trailing bytes
+    // ignored); their old landscape slots 6/7 will be re-set in the web UI.
     snprintf(key, sizeof(key), "p%d_slots", i);
-    size_t read = prefs.getBytes(key, cfg.gaugeSlots, GAUGE_SLOT_COUNT);
-    if (read != GAUGE_SLOT_COUNT) {
+    memset(cfg.gaugeSlots, GAUGE_EMPTY, sizeof(cfg.gaugeSlots));
+    size_t read = prefs.getBytes(key, cfg.gaugeSlots, sizeof(cfg.gaugeSlots));
+    if (read < sizeof(cfg.gaugeSlots)) {
       defaultGaugeSlots(cfg.gaugeSlots);
     } else {
+      uint8_t def[GAUGE_SLOT_COUNT];
+      defaultGaugeSlots(def);
       for (uint8_t g = 0; g < GAUGE_SLOT_COUNT; g++) {
-        if (cfg.gaugeSlots[g] >= GAUGE_TYPE_COUNT) {
-          uint8_t def[GAUGE_SLOT_COUNT];
-          defaultGaugeSlots(def);
-          cfg.gaugeSlots[g] = def[g];
-        }
+        if (cfg.gaugeSlots[g] >= GAUGE_TYPE_COUNT) cfg.gaugeSlots[g] = def[g];
       }
+    }
+
+    snprintf(key, sizeof(key), "p%d_lext", i);
+    memset(cfg.landscapeExtras, GAUGE_EMPTY, sizeof(cfg.landscapeExtras));
+    prefs.getBytes(key, cfg.landscapeExtras, sizeof(cfg.landscapeExtras));
+    for (uint8_t g = 0; g < LANDSCAPE_EXTRA_COUNT; g++) {
+      if (cfg.landscapeExtras[g] >= GAUGE_TYPE_COUNT) cfg.landscapeExtras[g] = GAUGE_EMPTY;
+    }
+
+    snprintf(key, sizeof(key), "p%d_pext", i);
+    memset(cfg.portraitExtras, GAUGE_EMPTY, sizeof(cfg.portraitExtras));
+    prefs.getBytes(key, cfg.portraitExtras, sizeof(cfg.portraitExtras));
+    for (uint8_t g = 0; g < PORTRAIT_EXTRA_COUNT; g++) {
+      if (cfg.portraitExtras[g] >= GAUGE_TYPE_COUNT) cfg.portraitExtras[g] = GAUGE_EMPTY;
     }
 
     // AMS view (per-printer): 240x240 only, replaces gauge row 2 with AMS strip
@@ -292,6 +313,8 @@ void loadSettings() {
   dispSettings.fanMatchPrinter = prefs.getBool("dsp_fanmp", def.fanMatchPrinter);
   dispSettings.invertColors = prefs.getBool("dsp_inv", def.invertColors);
   dispSettings.cydPanelClassic = prefs.getBool("dsp_cydcls", def.cydPanelClassic);
+  dispSettings.landscape8Slots = prefs.getBool("dsp_l8s", def.landscape8Slots);
+  dispSettings.portrait9Slots = prefs.getBool("dsp_p9s", def.portrait9Slots);
   dispSettings.clockTimeColor = prefs.getUShort("dsp_clkt", CLR_TEXT);
   dispSettings.clockDateColor = prefs.getUShort("dsp_clkd", CLR_TEXT_DIM);
   {
@@ -530,6 +553,8 @@ void saveSettings() {
   prefs.putBool("dsp_fanmp", dispSettings.fanMatchPrinter);
   prefs.putBool("dsp_inv", dispSettings.invertColors);
   prefs.putBool("dsp_cydcls", dispSettings.cydPanelClassic);
+  prefs.putBool("dsp_l8s", dispSettings.landscape8Slots);
+  prefs.putBool("dsp_p9s", dispSettings.portrait9Slots);
   prefs.putUShort("dsp_clkt", dispSettings.clockTimeColor);
   prefs.putUShort("dsp_clkd", dispSettings.clockDateColor);
   prefs.putUChar("dsp_clkts", dispSettings.clockTimeSize);
@@ -639,7 +664,11 @@ void savePrinterConfig(uint8_t index) {
   prefs.putUChar(key, cfg.region);
 
   snprintf(key, sizeof(key), "p%d_slots", index);
-  prefs.putBytes(key, cfg.gaugeSlots, GAUGE_SLOT_COUNT);
+  prefs.putBytes(key, cfg.gaugeSlots, sizeof(cfg.gaugeSlots));
+  snprintf(key, sizeof(key), "p%d_lext", index);
+  prefs.putBytes(key, cfg.landscapeExtras, sizeof(cfg.landscapeExtras));
+  snprintf(key, sizeof(key), "p%d_pext", index);
+  prefs.putBytes(key, cfg.portraitExtras, sizeof(cfg.portraitExtras));
 
   snprintf(key, sizeof(key), "p%d_amsv", index);
   prefs.putBool(key, cfg.amsView);

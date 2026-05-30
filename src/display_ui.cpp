@@ -2203,6 +2203,82 @@ static void drawAmsTrayBar(int16_t x, int16_t y, int16_t w, int16_t h,
   }
 }
 
+// Gauge-slot AMS visualization: one rounded vertical bar per loaded tray (same
+// look as the landscape sidebar / portrait strip), no humidity. Bar count tracks
+// the unit's actual trayCount, so an AMS HT (single slot) shows one centered bar
+// instead of three empty ones. Centered in a square 2R x 2R region; "AMS N"
+// label below at the standard gauge-label position.
+static void drawAmsBarsGauge(int16_t cx, int16_t cy, int16_t radius,
+                             const AmsState& ams, uint8_t unitIndex,
+                             bool forceRedraw) {
+  uint16_t bg = dispSettings.bgColor;
+
+  const bool unitPresent = ams.present
+                        && unitIndex < AMS_MAX_UNITS
+                        && unitIndex < ams.unitCount
+                        && ams.units[unitIndex].present;
+
+  // Number of bars = the unit's actual tray count, so an AMS HT (1 slot) draws
+  // a single centered bar. Mirrors the standard AMS strip/sidebar (drawAmsZone),
+  // which also centers `trayCount` bars. Fall back to the full count while the
+  // unit isn't reporting yet (placeholder before AMS data arrives).
+  uint8_t bars = unitPresent ? ams.units[unitIndex].trayCount : AMS_TRAYS_PER_UNIT;
+  if (bars == 0 || bars > AMS_TRAYS_PER_UNIT) bars = AMS_TRAYS_PER_UNIT;
+
+  // The bar count can shrink at runtime (4 placeholder bars before AMS HT data
+  // arrives, then 1). That transition doesn't always come with forceRedraw, so
+  // the leftover bars would ghost; track the last-drawn count per unit and wipe
+  // the slot whenever it changes as well.
+  static uint8_t prevBars[AMS_MAX_UNITS] = { 0, 0, 0, 0 };
+  bool clear = forceRedraw || (unitIndex < AMS_MAX_UNITS && prevBars[unitIndex] != bars);
+  if (unitIndex < AMS_MAX_UNITS) prevBars[unitIndex] = bars;
+  if (clear) {
+    // Rect clear (not circle) - bars are top-anchored and reach into the
+    // corners of the bounding square, where a circle of radius+2 would miss
+    // a few pixels at every corner. Match the slot-type-change clear in
+    // the printing-screen slot loop so behaviour stays consistent.
+    const int16_t side = radius * 2 + 4;
+    tft.fillRect(cx - radius - 2, cy - radius - 2, side, side, bg);
+  }
+
+  const int16_t innerSize = radius * 2;
+  const int16_t barGap = 2;
+  // Bar width is sized for the full 4-slot layout so a 1-tray HT unit shows a
+  // single bar the same width as one bar in a 4-tray unit, just centered.
+  int16_t barW = (innerSize - (AMS_TRAYS_PER_UNIT - 1) * barGap) / AMS_TRAYS_PER_UNIT;
+  if (barW < 4) barW = 4;
+  if (barW > 18) barW = 18;
+  // Reserve top space for the active-tray notch and bottom space so the slot
+  // label ("AMS N") sits below the bars without clipping into them. Bars are
+  // top-anchored — the saved height becomes the breathing room above the label.
+  const int16_t barTopMargin    = 2;
+  const int16_t barLabelMargin  = 14;
+  int16_t barH = innerSize - barTopMargin - barLabelMargin;
+  if (barH < 10) barH = 10;
+  const int16_t totalW = barW * bars + (bars - 1) * barGap;
+  const int16_t startX = cx - totalW / 2;
+  const int16_t startY = cy - innerSize / 2 + barTopMargin;
+
+  AmsTray absent{};
+  absent.present = false;
+
+  for (uint8_t t = 0; t < bars; t++) {
+    int16_t bx = startX + t * (barW + barGap);
+    uint8_t trayIdx = unitIndex * AMS_TRAYS_PER_UNIT + t;
+    bool active = unitPresent && (trayIdx == ams.activeTray);
+    const AmsTray& tray = unitPresent ? ams.trays[trayIdx] : absent;
+    drawAmsTrayBarRounded(bx, startY, barW, barH, tray, active);
+  }
+
+  static const char* amsLabel[AMS_MAX_UNITS] = { "AMS 1", "AMS 2", "AMS 3", "AMS 4" };
+  bool sm = dispSettings.smallLabels;
+  int16_t labelY = cy + radius + (sm ? 3 : -1);
+  tft.setTextDatum(MC_DATUM);
+  setFont(tft, sm ? FONT_SMALL : FONT_BODY);
+  tft.setTextColor(CLR_TEXT_DIM, bg);
+  tft.drawString(amsLabel[unitIndex], cx, labelY);
+}
+
 // Portrait AMS strip: horizontal row of tray bars, usable from printing/idle/finished.
 // Draws at (0, zoneY) full width, clears zoneH pixels, bars are barH tall.
 // All groups get uniform width (based on AMS_TRAYS_PER_UNIT slots) so labels
@@ -2588,6 +2664,94 @@ static int16_t drawBatteryPrefix(int16_t y) {
 }
 
 // ---------------------------------------------------------------------------
+//  Helper: gauge slot grid descriptor.
+//
+//  drawPrinting() supports three slot layouts that draw from three INDEPENDENT
+//  per-printer arrays so each physical position has its own gauge type:
+//    - 2x3 standard  (6 slots, cfg.gaugeSlots[0..5])              every mode
+//    - 2x4 landscape (+2 slots, cfg.landscapeExtras[0..1])        landscape8Slots
+//    - 3x3 portrait  (+3 slots, cfg.portraitExtras[0..2])         portrait9Slots
+//                                                       (LY_PORT9_GAUGE_R only)
+//
+//  computeSlotGrid resolves which array each visible slot pulls from for the
+//  current mode, so the printing-screen body just reads grid.types[si] and
+//  grid.x/y[si] without caring about the storage layout. To add a new mode:
+//  add a new PrinterConfig extras array, a new branch here, and a web-UI
+//  section - the slot loop stays untouched.
+// ---------------------------------------------------------------------------
+struct SlotGrid {
+  int16_t x[GAUGE_SLOT_MAX];
+  int16_t y[GAUGE_SLOT_MAX];
+  uint8_t types[GAUGE_SLOT_MAX];  // resolved gauge type per visible slot
+  int16_t r;                       // per-mode gauge radius
+  uint8_t count;                   // 6, 8, or 9 - upper bound for the slot loop
+};
+
+static void computeSlotGrid(SlotGrid& g, const PrinterConfig& cfg, bool landscape) {
+  const bool eight = landscape && dispSettings.landscape8Slots;
+#if defined(LY_PORT9_GAUGE_R)
+  const bool nine  = !landscape && dispSettings.portrait9Slots;
+#else
+  const bool nine  = false;
+#endif
+
+  // Zero everything first so unused slots resolve to (0, 0)/EMPTY and skip.
+  for (uint8_t i = 0; i < GAUGE_SLOT_MAX; i++) {
+    g.x[i] = 0; g.y[i] = 0; g.types[i] = GAUGE_EMPTY;
+  }
+
+  // Slots 0-5 always come from the standard array, regardless of mode.
+  for (uint8_t i = 0; i < GAUGE_SLOT_COUNT; i++) g.types[i] = cfg.gaugeSlots[i];
+
+  if (eight) {
+#if defined(LAYOUT_HAS_LANDSCAPE) && defined(LY_LAND8_COL1)
+    const int16_t cs[4] = { LY_LAND8_COL1, LY_LAND8_COL2, LY_LAND8_COL3, LY_LAND8_COL4 };
+    const int16_t rs[2] = { LY_LAND_ROW1,  LY_LAND_ROW2 };
+    g.r = LY_GAUGE_R; g.count = 8;
+    for (uint8_t row = 0; row < 2; row++)
+      for (uint8_t col = 0; col < 4; col++) {
+        g.x[row * 4 + col] = cs[col];
+        g.y[row * 4 + col] = rs[row];
+      }
+    g.types[6] = cfg.landscapeExtras[0];
+    g.types[7] = cfg.landscapeExtras[1];
+    return;
+#endif
+  }
+#if defined(LY_PORT9_GAUGE_R)
+  if (nine) {
+    const int16_t cs[3] = { LY_COL1, LY_COL2, LY_COL3 };
+    const int16_t rs[3] = { LY_PORT9_ROW1, LY_PORT9_ROW2, LY_PORT9_ROW3 };
+    g.r = LY_PORT9_GAUGE_R; g.count = 9;
+    for (uint8_t row = 0; row < 3; row++)
+      for (uint8_t col = 0; col < 3; col++) {
+        g.x[row * 3 + col] = cs[col];
+        g.y[row * 3 + col] = rs[row];
+      }
+    g.types[6] = cfg.portraitExtras[0];
+    g.types[7] = cfg.portraitExtras[1];
+    g.types[8] = cfg.portraitExtras[2];
+    return;
+  }
+#endif
+
+  // Default: 2x3, columns + rows pick portrait/landscape variant.
+#if defined(LAYOUT_HAS_LANDSCAPE)
+  const int16_t c0 = landscape ? LY_LAND_COL1 : LY_COL1;
+  const int16_t c1 = landscape ? LY_LAND_COL2 : LY_COL2;
+  const int16_t c2 = landscape ? LY_LAND_COL3 : LY_COL3;
+  const int16_t r0 = landscape ? LY_LAND_ROW1 : LY_ROW1;
+  const int16_t r1 = landscape ? LY_LAND_ROW2 : LY_ROW2;
+#else
+  const int16_t c0 = LY_COL1, c1 = LY_COL2, c2 = LY_COL3;
+  const int16_t r0 = LY_ROW1, r1 = LY_ROW2;
+#endif
+  g.r = LY_GAUGE_R; g.count = 6;
+  g.x[0]=c0; g.x[1]=c1; g.x[2]=c2; g.x[3]=c0; g.x[4]=c1; g.x[5]=c2;
+  g.y[0]=r0; g.y[1]=r0; g.y[2]=r0; g.y[3]=r1; g.y[4]=r1; g.y[5]=r1;
+}
+
+// ---------------------------------------------------------------------------
 //  Screen: Printing (main dashboard)
 //  Layout: LED bar | header | 2x3 gauge grid | info line
 // ---------------------------------------------------------------------------
@@ -2621,19 +2785,29 @@ static void drawPrinting() {
   const bool unitsZoneChanged = false;
 #endif
 
-  // 2x3 gauge grid constants (from layout profile)
-  const int16_t gR = LY_GAUGE_R;
+  // Gauge grid constants. gR is per-mode (shrunk for 3x3 portrait); gT (arc
+  // thickness) stays at the layout default because the arc geometry scales
+  // with radius internally.
+  SlotGrid grid;
+  computeSlotGrid(grid, p.config, isLandscape());
+  const int16_t gR = grid.r;
   const int16_t gT = LY_GAUGE_T;
 
   // Effective Y positions — landscape on CYD uses 240x240-style positions
 #if defined(LAYOUT_HAS_AMS_STRIP)
   const bool land = isLandscape();
   const uint8_t units = s.ams.unitCount;
-  // Right column (badge + AMS) only used in landscape with at least one AMS.
-  const bool landAmsCol = land && units >= 1;
+  // 8-slot landscape mode: drops the AMS sidebar in favour of a 2x4 gauge
+  // grid spanning the full canvas. Everything that branches on landAmsCol
+  // (header clear width, ETA/bot-bar widths, sidebar badge) naturally folds
+  // back to the "no right column" path.
+  const bool land8 = land && dispSettings.landscape8Slots;
+  // Right column (badge + AMS) only used in landscape with at least one AMS
+  // and when the 8-slot mode hasn't claimed that strip for gauges.
+  const bool landAmsCol = land && units >= 1 && !land8;
   // Bottom bar / ETA span the full 320 only when right column doesn't need
   // to extend down to the screen edge (0..2 AMS, or no AMS).
-  const bool botFull = land && landBottomBarFullWidth(units);
+  const bool botFull = land && (land8 || landBottomBarFullWidth(units));
   const int16_t eff_etaY     = land ? LY_LAND_ETA_Y     : LY_ETA_Y;
   const int16_t eff_etaH     = land ? LY_LAND_ETA_H     : LY_ETA_H;
   const int16_t eff_etaTextY = land ? LY_LAND_ETA_TEXT_Y : LY_ETA_TEXT_Y;
@@ -2787,31 +2961,30 @@ static void drawPrinting() {
   const bool amsStripVisible = false;
 #endif
 
-  // === Configurable 2x3 gauge grid ===
+  // === Configurable gauge grid (6 / 8 / 9 slots, see computeSlotGrid) ===
   {
-    // Slot positions are rotation-dependent (LY_LAND_* on landscape boards),
-    // so build the tables at call time instead of caching as static const.
-#if defined(LAYOUT_HAS_LANDSCAPE)
-    const bool gaugeLand = isLandscape();
-    const int16_t c0 = gaugeLand ? LY_LAND_COL1 : LY_COL1;
-    const int16_t c1 = gaugeLand ? LY_LAND_COL2 : LY_COL2;
-    const int16_t c2 = gaugeLand ? LY_LAND_COL3 : LY_COL3;
-    const int16_t r0 = gaugeLand ? LY_LAND_ROW1 : LY_ROW1;
-    const int16_t r1 = gaugeLand ? LY_LAND_ROW2 : LY_ROW2;
-#else
-    const int16_t c0 = LY_COL1, c1 = LY_COL2, c2 = LY_COL3;
-    const int16_t r0 = LY_ROW1, r1 = LY_ROW2;
-#endif
-    const int16_t slotX[GAUGE_SLOT_COUNT] = { c0, c1, c2, c0, c1, c2 };
-    const int16_t slotY[GAUGE_SLOT_COUNT] = { r0, r0, r0, r1, r1, r1 };
-    static uint8_t prevSlotTypes[GAUGE_SLOT_COUNT] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+    // Grid is already populated for this frame at the top of drawPrinting()
+    // (gR/gT use grid.r). Read-only here.
+    const int16_t* slotX = grid.x;
+    const int16_t* slotY = grid.y;
+    const uint8_t  slotCount = grid.count;
+    static uint8_t prevSlotTypes[GAUGE_SLOT_MAX] = {
+      0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+    };
     // Invalidate per-slot redraw cache when rotation flips, so the gauges
     // get a clean redraw at their new (x, y) instead of leaving artefacts
     // at the old positions.
     static uint8_t prevSlotRotation = 0xFF;
     if (prevSlotRotation != dispSettings.rotation) {
-      for (uint8_t i = 0; i < GAUGE_SLOT_COUNT; i++) prevSlotTypes[i] = 0xFF;
+      for (uint8_t i = 0; i < GAUGE_SLOT_MAX; i++) prevSlotTypes[i] = 0xFF;
       prevSlotRotation = dispSettings.rotation;
+    }
+    // Same cache invalidation when slot count changes (6 <-> 8 <-> 9) — the
+    // grid shape itself shifts and any frame-cached positions are stale.
+    static uint8_t prevSlotCount = 0;
+    if (prevSlotCount != slotCount) {
+      for (uint8_t i = 0; i < GAUGE_SLOT_MAX; i++) prevSlotTypes[i] = 0xFF;
+      prevSlotCount = slotCount;
     }
     // Labels for GAUGE_CHAMBER_FAN (Chamber vs Exhaust) and GAUGE_AUX_FAN (Aux vs
     // L.Aux) depend on s.airductFuncs, which starts at 0 and gets bits OR'd in
@@ -2822,27 +2995,39 @@ static void drawPrinting() {
     // mask changes (typically once per session, on the first pushall).
     static uint32_t prevAirductFuncs = 0;
     if (prevAirductFuncs != s.airductFuncs) {
-      for (uint8_t i = 0; i < GAUGE_SLOT_COUNT; i++) {
-        uint8_t gtPrev = p.config.gaugeSlots[i];
+      for (uint8_t i = 0; i < slotCount; i++) {
+        uint8_t gtPrev = grid.types[i];
         if (gtPrev == GAUGE_CHAMBER_FAN || gtPrev == GAUGE_AUX_FAN) prevSlotTypes[i] = 0xFF;
       }
       prevAirductFuncs = s.airductFuncs;
     }
 
-    for (uint8_t si = 0; si < GAUGE_SLOT_COUNT; si++) {
+    // Mark any slots beyond the current mode's count as needing a clean
+    // redraw if they ever become active again — they aren't drawn this frame.
+    for (uint8_t si = slotCount; si < GAUGE_SLOT_MAX; si++) prevSlotTypes[si] = 0xFF;
+
+    for (uint8_t si = 0; si < slotCount; si++) {
       // Skip row-2 slots when AMS view replaces them. Mark prevSlotTypes as
       // invalid so toggling back later forces a clean redraw.
       if (amsViewActive && si >= 3) { prevSlotTypes[si] = 0xFF; continue; }
-      uint8_t gt = p.config.gaugeSlots[si];
+      uint8_t gt = grid.types[si];
       if (gt >= GAUGE_TYPE_COUNT) gt = GAUGE_EMPTY;
 
       bool typeChanged = (gt != prevSlotTypes[si]);
       if (typeChanged) {
         // Slot type changed (or first draw) - clear area and reset cache.
+        // Use a square fill, not a circle: GAUGE_AMS_BARS draws a rectangular
+        // bar block that extends into the corners of the slot bounding box,
+        // so a circular clear would leave ghost pixels behind when switching
+        // away from it. Spacing math (see computeSlotGrid) leaves >=4px
+        // between this square and the next slot's, even on the densest
+        // 320x480 9-slot grid.
+        const int16_t slotClear = gR * 2 + 4;
+        tft.fillRect(slotX[si] - gR - 2, slotY[si] - gR - 2,
+                     slotClear, slotClear, dispSettings.bgColor);
         // Label is drawn MC_DATUM at labelY, so its glyphs straddle that line;
         // FONT_BODY (~20px) and FONT_SMALL (~14px) need a generous band to fully
         // erase a longer previous label when shrinking to a shorter one.
-        tft.fillCircle(slotX[si], slotY[si], gR + 2, dispSettings.bgColor);
         bool sm = dispSettings.smallLabels;
         int16_t labelY = slotY[si] + gR + (sm ? 3 : -1);
         int16_t lh     = sm ? 18 : 24;
@@ -2877,22 +3062,31 @@ static void drawPrinting() {
               uint8_t ui = gt - GAUGE_AMS_TEMP_1;
               const AmsUnit &cu = s.ams.units[ui], &pu = prevState.ams.units[ui];
               needDraw = cu.temp != pu.temp || cu.present != pu.present;
-            } else if (gt >= GAUGE_AMS_FILAMENT_1 && gt <= GAUGE_AMS_FILAMENT_4) {
-              uint8_t ui = gt - GAUGE_AMS_FILAMENT_1;
+            } else if ((gt >= GAUGE_AMS_FILAMENT_1 && gt <= GAUGE_AMS_FILAMENT_4)
+                    || (gt >= GAUGE_AMS_BARS_1     && gt <= GAUGE_AMS_BARS_4)) {
+              uint8_t ui = (gt >= GAUGE_AMS_BARS_1) ? (gt - GAUGE_AMS_BARS_1)
+                                                    : (gt - GAUGE_AMS_FILAMENT_1);
+              const bool isBars = (gt >= GAUGE_AMS_BARS_1);
               needDraw = s.ams.present != prevState.ams.present
                       || s.ams.unitCount != prevState.ams.unitCount;
               if (!needDraw) {
                 const AmsUnit &cu = s.ams.units[ui], &pu = prevState.ams.units[ui];
+                // Bars gauge does not show humidity, so skip the humidity diff
+                // to avoid redundant redraws.
                 if (cu.present != pu.present
-                    || cu.humidity != pu.humidity
+                    || (!isBars && cu.humidity != pu.humidity)
                     || cu.trayCount != pu.trayCount) needDraw = true;
+              }
+              if (!needDraw && isBars && s.ams.activeTray != prevState.ams.activeTray) {
+                needDraw = true;
               }
               if (!needDraw) {
                 for (int t = 0; t < AMS_TRAYS_PER_UNIT; t++) {
                   int idx = ui * AMS_TRAYS_PER_UNIT + t;
                   const AmsTray &ct = s.ams.trays[idx], &pt = prevState.ams.trays[idx];
                   if (ct.present != pt.present || ct.colorRgb565 != pt.colorRgb565
-                      || ct.remain != pt.remain || strcmp(ct.type, pt.type) != 0) {
+                      || ct.remain != pt.remain
+                      || (!isBars && strcmp(ct.type, pt.type) != 0)) {
                     needDraw = true; break;
                   }
                 }
@@ -2983,6 +3177,9 @@ static void drawPrinting() {
           } else if (gt >= GAUGE_AMS_FILAMENT_1 && gt <= GAUGE_AMS_FILAMENT_4) {
             uint8_t ui = gt - GAUGE_AMS_FILAMENT_1;
             drawAmsFilamentAllGauge(tft, cx, cy, gR, gT, s.ams, ui, fr);
+          } else if (gt >= GAUGE_AMS_BARS_1 && gt <= GAUGE_AMS_BARS_4) {
+            uint8_t ui = gt - GAUGE_AMS_BARS_1;
+            drawAmsBarsGauge(cx, cy, gR, s.ams, ui, fr);
           } else {
             if (fr) tft.fillCircle(cx, cy, gR + 2, dispSettings.bgColor);
           }
@@ -2999,7 +3196,18 @@ static void drawPrinting() {
   // (e.g. transient unitCount=0 from MQTT reconnect).
 #if defined(LAYOUT_HAS_AMS_STRIP)
   const bool amsForce = forceRedraw || unitsZoneChanged;
-  if (isLandscape() || (s.ams.present && s.ams.unitCount > 0)) {
+  // Both extended grid modes claim the area drawAmsZone would paint into:
+  //  - landscape 8-slot replaces the right-side sidebar
+  //  - portrait 9-slot replaces the bottom AMS strip
+  // Skip drawAmsZone whenever the corresponding mode is on; the toggle-change
+  // detector at the top of displayUI() forces a clean repaint when flipping.
+  const bool skipAmsZone =
+        ( isLandscape() && dispSettings.landscape8Slots)
+#if defined(LY_PORT9_GAUGE_R)
+     || (!isLandscape() && dispSettings.portrait9Slots)
+#endif
+        ;
+  if (!skipAmsZone && (isLandscape() || (s.ams.present && s.ams.unitCount > 0))) {
     drawAmsZone(s, amsForce);
   }
 #endif
@@ -3660,6 +3868,21 @@ void updateDisplay() {
       setBacklight(getEffectiveBrightness());  // dim for screensaver
     }
     prevScreen = currentScreen;
+  }
+
+  // Grid-mode toggles (landscape-8 / portrait-9): flipping either mid-frame
+  // leaves pixels from the previous layout on screen (the AMS sidebar, the
+  // AMS strip, or a now-unused column/row) until something else forces a
+  // redraw. Treat it like a screen change so the next frame paints clean.
+  static bool prev8Slots = dispSettings.landscape8Slots;
+  static bool prev9Slots = dispSettings.portrait9Slots;
+  if (prev8Slots != dispSettings.landscape8Slots ||
+      prev9Slots != dispSettings.portrait9Slots) {
+    tft.fillScreen(dispSettings.bgColor);
+    markFrameDirty();
+    forceRedraw = true;
+    prev8Slots = dispSettings.landscape8Slots;
+    prev9Slots = dispSettings.portrait9Slots;
   }
 
   switch (currentScreen) {

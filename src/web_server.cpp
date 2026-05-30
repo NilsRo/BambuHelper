@@ -238,14 +238,17 @@ static void handleSaveGaugeLayout() {
 #endif
 
   PrinterConfig& cfg = printers[slot].config;
-  for (uint8_t g = 0; g < GAUGE_SLOT_COUNT; g++) {
+  auto readSlotArg = [&](const char* prefix, uint8_t idx, uint8_t& out) {
     char argName[8];
-    snprintf(argName, sizeof(argName), "gs%d", g);
+    snprintf(argName, sizeof(argName), "%s%d", prefix, idx);
     if (server.hasArg(argName)) {
       uint8_t val = server.arg(argName).toInt();
-      cfg.gaugeSlots[g] = (val < GAUGE_TYPE_COUNT) ? val : GAUGE_EMPTY;
+      out = (val < GAUGE_TYPE_COUNT) ? val : GAUGE_EMPTY;
     }
-  }
+  };
+  for (uint8_t g = 0; g < GAUGE_SLOT_COUNT;       g++) readSlotArg("gs", g, cfg.gaugeSlots[g]);
+  for (uint8_t g = 0; g < LANDSCAPE_EXTRA_COUNT;  g++) readSlotArg("lx", g, cfg.landscapeExtras[g]);
+  for (uint8_t g = 0; g < PORTRAIT_EXTRA_COUNT;   g++) readSlotArg("px", g, cfg.portraitExtras[g]);
   cfg.amsView = server.hasArg("amsv");
 
   savePrinterConfig(slot);
@@ -456,6 +459,8 @@ static void handleToggleSetting() {
   else if (key == "fanmp")   dispSettings.fanMatchPrinter = on;
   else if (key == "invcol")  dispSettings.invertColors = on;
   else if (key == "cydcls")  dispSettings.cydPanelClassic = on;
+  else if (key == "l8s")     dispSettings.landscape8Slots = on;
+  else if (key == "p9s")     dispSettings.portrait9Slots = on;
   else if (key == "nighten") dpSettings.nightModeEnabled = on;
   else if (key == "use24h")  netSettings.use24h = on;
 #ifdef BOARD_LOW_RAM
@@ -524,6 +529,10 @@ static void handlePrinterConfig() {
   doc["hasExhaustFan"]  = (st.airductFuncs & (1u << 2)) != 0;  // X2D + H2C
   JsonArray slots = doc["gaugeSlots"].to<JsonArray>();
   for (uint8_t g = 0; g < GAUGE_SLOT_COUNT; g++) slots.add(cfg.gaugeSlots[g]);
+  JsonArray lext = doc["landscapeExtras"].to<JsonArray>();
+  for (uint8_t g = 0; g < LANDSCAPE_EXTRA_COUNT; g++) lext.add(cfg.landscapeExtras[g]);
+  JsonArray pext = doc["portraitExtras"].to<JsonArray>();
+  for (uint8_t g = 0; g < PORTRAIT_EXTRA_COUNT;  g++) pext.add(cfg.portraitExtras[g]);
   doc["amsView"] = cfg.amsView;
 
   String json;
@@ -852,6 +861,10 @@ static void handleSettingsExport() {
     p["region"] = (uint8_t)cfg.region;
     JsonArray slots = p["gaugeSlots"].to<JsonArray>();
     for (uint8_t g = 0; g < GAUGE_SLOT_COUNT; g++) slots.add(cfg.gaugeSlots[g]);
+    JsonArray lext = p["landscapeExtras"].to<JsonArray>();
+    for (uint8_t g = 0; g < LANDSCAPE_EXTRA_COUNT; g++) lext.add(cfg.landscapeExtras[g]);
+    JsonArray pext = p["portraitExtras"].to<JsonArray>();
+    for (uint8_t g = 0; g < PORTRAIT_EXTRA_COUNT;  g++) pext.add(cfg.portraitExtras[g]);
     p["amsView"] = cfg.amsView;
   }
 
@@ -1062,7 +1075,11 @@ static void handleSettingsImportFinish() {
       if (p["cloudUserId"].is<const char*>()) strlcpy(cfg.cloudUserId, p["cloudUserId"], sizeof(cfg.cloudUserId));
       if (p["region"].is<uint8_t>())          cfg.region = (CloudRegion)p["region"].as<uint8_t>();
       JsonArray slots = p["gaugeSlots"];
-      if (slots && slots.size() == GAUGE_SLOT_COUNT) {
+      // Standard 2x3 grid. Accept any export with size >= 6 (legacy 8/9-byte
+      // arrays from the in-development shared-extras branch get truncated -
+      // their extras moved to dedicated landscapeExtras / portraitExtras
+      // fields in the same export, so nothing is lost).
+      if (slots && slots.size() >= 6) {
         static const uint8_t defSlots[GAUGE_SLOT_COUNT] = {
           GAUGE_PROGRESS, GAUGE_NOZZLE, GAUGE_BED,
           GAUGE_PART_FAN, GAUGE_AUX_FAN, GAUGE_CHAMBER_FAN
@@ -1072,6 +1089,18 @@ static void handleSettingsImportFinish() {
           cfg.gaugeSlots[g] = (v < GAUGE_TYPE_COUNT) ? v : defSlots[g];
         }
       }
+      auto importExtras = [](JsonArray arr, uint8_t* out, uint8_t count) {
+        for (uint8_t g = 0; g < count; g++) {
+          if (arr && g < arr.size()) {
+            uint8_t v = arr[g].as<uint8_t>();
+            out[g] = (v < GAUGE_TYPE_COUNT) ? v : GAUGE_EMPTY;
+          } else {
+            out[g] = GAUGE_EMPTY;
+          }
+        }
+      };
+      importExtras(p["landscapeExtras"].as<JsonArray>(), cfg.landscapeExtras, LANDSCAPE_EXTRA_COUNT);
+      importExtras(p["portraitExtras"].as<JsonArray>(),  cfg.portraitExtras,  PORTRAIT_EXTRA_COUNT);
       if (p["amsView"].is<bool>()) {
         cfg.amsView = p["amsView"].as<bool>();
       } else if (legacyAmsViewPresent) {

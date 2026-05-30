@@ -31,10 +31,23 @@ enum GaugeType : uint8_t {
   GAUGE_AMS_FILAMENT_4 = 22,    // AMS unit 4 - all 4 trays + humidity
   GAUGE_AUX_FAN_RIGHT  = 23,    // X2D right aux fan (device.airduct.parts func=6)
   GAUGE_EXHAUST_FAN    = 24,    // X2D exhaust fan (device.airduct.parts func=2)
+  GAUGE_AMS_BARS_1     = 25,    // AMS unit 1 - 4 vertical color bars (no humidity)
+  GAUGE_AMS_BARS_2     = 26,    // AMS unit 2
+  GAUGE_AMS_BARS_3     = 27,    // AMS unit 3
+  GAUGE_AMS_BARS_4     = 28,    // AMS unit 4
   GAUGE_TYPE_COUNT  // sentinel - always last
 };
 
+// Standard 2x3 gauge grid - the 6 slots are used in every mode.
 static const uint8_t GAUGE_SLOT_COUNT = 6;
+// Extended grids add a 4th column (landscape) or 3rd row (portrait).
+// Each extension stores its slots in its own PrinterConfig array so the gauge
+// type for "col 4 row 1" and "row 3 col 1" can be set independently.
+static const uint8_t LANDSCAPE_EXTRA_COUNT = 2;  // col 4 top, col 4 bot
+static const uint8_t PORTRAIT_EXTRA_COUNT  = 3;  // row 3 left, mid, right
+// Max slots displayed by any mode at once. Used to size per-frame slot caches
+// in display_ui.cpp (prevSlotTypes, SlotGrid arrays).
+static const uint8_t GAUGE_SLOT_MAX = GAUGE_SLOT_COUNT + PORTRAIT_EXTRA_COUNT;  // 9
 
 // Per-gauge color config
 struct GaugeColors {
@@ -58,6 +71,10 @@ struct DisplaySettings {
   bool     cydPanelClassic; // CYD only: use plain Panel_ILI9341 (no inversion)
                             // instead of Panel_ILI9341_2 — for the other
                             // hardware revision that shows mirrored image.
+  bool     landscape8Slots; // 240x320 landscape: replace AMS sidebar with a
+                            // symmetric 2x4 gauge grid (8 slots, no sidebar).
+  bool     portrait9Slots;  // 240x320 / 320x480 portrait: replace AMS strip
+                            // with a 3x3 gauge grid (9 slots, smaller R).
   uint16_t clockTimeColor; // clock digits color (RGB565)
   uint16_t clockDateColor; // clock date/AM-PM color (RGB565)
   uint8_t  clockTimeSize;  // 0=Auto, 1=Normal(1.0x), 2=Medium(1.5x), 3=Large(2.0x). Auto = Large on >=480, Medium on >=320, else Normal.
