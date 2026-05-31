@@ -3881,6 +3881,13 @@ void updateDisplay() {
     tft.fillScreen(dispSettings.bgColor);
     markFrameDirty();
     forceRedraw = true;
+    // The clock paints from its own digit cache and ignores forceRedraw, so the
+    // fillScreen above would leave it blank (only the colon blinks) until the
+    // next minute/hour roll. Reset the active clock cache so it repaints clean.
+    if (currentScreen == SCREEN_CLOCK) {
+      if (dispSettings.pongClock) resetPongClock();
+      else resetClock();
+    }
     prev8Slots = dispSettings.landscape8Slots;
     prev9Slots = dispSettings.portrait9Slots;
   }
