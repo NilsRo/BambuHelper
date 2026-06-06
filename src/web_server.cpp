@@ -324,6 +324,14 @@ static void handleStatus() {
   doc["connected"] = st.connected;
   doc["configured"] = isPrinterConfigured(slot);
   doc["state"] = st.gcodeState;
+  // "Connected but no data": broker accepted us but zero messages have arrived
+  // 20s after connecting. Means a wrong serial (topic never matches) or the
+  // printer is powered off - both look identical from the broker's side.
+  {
+    const MqttDiag& d = getMqttDiag(slot);
+    doc["no_data"] = st.connected && d.messagesRx == 0 && d.connectTime > 0 &&
+                     (millis() - d.connectTime) > 20000;
+  }
   doc["progress"] = st.progress;
   doc["nozzle"] = (int)st.nozzleTemp;
   doc["nozzle_t"] = (int)st.nozzleTarget;

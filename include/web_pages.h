@@ -756,7 +756,7 @@ html[data-theme="dark"] .topbar::after { opacity: 0.5; }
         <div class="field">
           <label for="cl_serial">Printer serial number</label>
           <input type="text" id="cl_serial" class="mono" value="%SERIAL%" placeholder="01P00A000000000" maxlength="19">
-          <div class="hint">Find it in Bambu Handy or on the printer's label.</div>
+          <div class="hint">Must match exactly (UPPERCASE). Find it in Bambu Handy, on the printer's label, or with the Companion Tool. A wrong serial connects but shows no data.</div>
         </div>
         <div class="field">
           <label for="cl_pname">Printer name</label>
@@ -2258,6 +2258,7 @@ function refreshLiveStats(){
     var h = '';
     if (d.display_off) h += '<div class="stat-row"><span>Display:</span><span class="stat-val" style="color:var(--danger)">Off</span></div>';
     if (d.connected){
+      if (d.no_data) h += '<div style="margin-bottom:var(--sp-2);padding:8px 10px;border:1px solid var(--danger);border-radius:6px;background:rgba(220,53,69,0.08);color:var(--danger);font-size:12.5px;line-height:1.5">Connected to Bambu, but no data received from the printer. Check: (1) the serial number is correct and UPPERCASE, (2) the printer is powered on.</div>';
       h += '<div class="stat-row"><span>State:</span><span class="stat-val">'+esc(d.state)+'</span></div>';
       h += '<div class="stat-row"><span>Nozzle:</span><span class="stat-val">'+d.nozzle+'/'+d.nozzle_t+'&deg;C</span></div>';
       h += '<div class="stat-row"><span>Bed:</span><span class="stat-val">'+d.bed+'/'+d.bed_t+'&deg;C</span></div>';
