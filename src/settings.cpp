@@ -381,8 +381,10 @@ void loadSettings() {
   strlcpy(netSettings.dns, prefs.getString("net_dns", "").c_str(), sizeof(netSettings.dns));
   netSettings.showIPAtStartup = prefs.getBool("net_showip", true);
   netSettings.mdnsEnabled = prefs.getBool("net_mdns", false);
-  strlcpy(netSettings.hostname, prefs.getString("net_host", "bambuhelper").c_str(),
-          sizeof(netSettings.hostname));
+  // Sanitize on load too: a bad value from an older build or corrupted NVS must
+  // never reach %MDNS_HOST% raw.
+  sanitizeHostname(prefs.getString("net_host", "bambuhelper").c_str(),
+                   netSettings.hostname, sizeof(netSettings.hostname));
 
   // Timezone: load POSIX string, migrating from legacy gmtOffsetMin if needed.
   // All reads and any migration writes happen in the same open transaction to
