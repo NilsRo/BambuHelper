@@ -1044,6 +1044,12 @@ static String settingsImportBuf;
 static bool   otaInProgress  = false;
 static bool   otaFirstChunk  = false;
 static String otaError       = "";
+// Every OTA entry point calls disconnectBambuMqtt() up front, and only a
+// reboot (success path) re-arms the connections. When an OTA attempt fails
+// or is aborted, this flag requests initBambuMqtt() from handleWebServer()
+// on the main loop - never directly from otaAutoTaskFn, whose 8KB stack
+// cannot host the TLS userId extraction initBambuMqtt() may perform.
+static volatile bool otaMqttReinitPending = false;
 
 // Auto-update (device-initiated, HTTPUpdate from GitHub releases)
 #ifdef ENABLE_OTA_AUTO
@@ -1419,6 +1425,7 @@ static void otaAutoTaskFn(void* param) {
       break;
     case HTTP_UPDATE_NO_UPDATES:
       otaAutoStatus = "already_current";
+      otaMqttReinitPending = true;  // no reboot coming - restore MQTT
       break;
     case HTTP_UPDATE_FAILED:
     default: {
@@ -1436,6 +1443,7 @@ static void otaAutoTaskFn(void* param) {
         }
       }
       otaAutoStatus = "failed: " + err;
+      otaMqttReinitPending = true;  // no reboot coming - restore MQTT
       break;
     }
   }
@@ -1556,6 +1564,9 @@ static void handleOtaUpload() {
   } else if (upload.status == UPLOAD_FILE_ABORTED) {
     Update.abort();
     otaInProgress = false;
+    // Client dropped the connection: handleOtaFinish() never runs for this
+    // request, so request the MQTT re-init here.
+    otaMqttReinitPending = true;
     Serial.println("OTA: aborted");
   }
 }
@@ -1565,6 +1576,7 @@ static void handleOtaFinish() {
     String msg = "{\"status\":\"error\",\"message\":\"" + otaError + "\"}";
     server.send(400, "application/json", msg);
     otaError = "";
+    otaMqttReinitPending = true;  // failed update means no reboot - restore MQTT
     return;
   }
   server.send(200, "application/json",
@@ -1644,6 +1656,19 @@ void initWebServer() {
 
 void handleWebServer() {
   server.handleClient();
+
+  if (otaMqttReinitPending) {
+    bool otaBusy = otaInProgress;
+#ifdef ENABLE_OTA_AUTO
+    otaBusy = otaBusy || otaAutoInProgress;
+#endif
+    if (!otaBusy) {
+      otaMqttReinitPending = false;
+      Serial.println("OTA: update failed/aborted, re-initializing MQTT");
+      initBambuMqtt();
+    }
+  }
+
   if (pendingRestartAt && millis() >= pendingRestartAt) {
     Serial.println("Deferred restart triggered");
     ESP.restart();
