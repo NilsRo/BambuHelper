@@ -2,8 +2,8 @@
 #include "buzzer.h"
 #include "settings.h"
 
-// ES8311 audio buzzer has its own backend
-#if !defined(BOARD_HAS_ES8311_AUDIO)
+// I2S audio boards (ES8311 codec, NS4168 amp) have their own backends
+#if !defined(BOARD_HAS_ES8311_AUDIO) && !defined(BOARD_HAS_NS4168_AUDIO)
 
 void buzzerBackendInit() {
   sanitizeBuzzerPin();
@@ -36,4 +36,4 @@ void buzzerBackendShutdown() {
   buzzerBackendStop();
 }
 
-#endif // !BOARD_HAS_ES8311_AUDIO
+#endif // !BOARD_HAS_ES8311_AUDIO && !BOARD_HAS_NS4168_AUDIO

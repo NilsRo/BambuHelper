@@ -359,7 +359,8 @@ static bool resolvePlaceholder(const char* name, String& out) {
   if (strcmp(name, "BUZ_ON") == 0)  { out = buzzerSettings.enabled ? "selected" : ""; return true; }
   if (strcmp(name, "BUZ_PIN") == 0) { out = String(buzzerSettings.pin); return true; }
   if (strcmp(name, "ES8311_AUDIO") == 0) {
-#if defined(BOARD_HAS_ES8311_AUDIO)
+    // "1" for any board with built-in I2S audio (no GPIO pin selection needed)
+#if defined(BOARD_HAS_ES8311_AUDIO) || defined(BOARD_HAS_NS4168_AUDIO)
     out = "1";
 #else
     out = "0";

@@ -113,6 +113,16 @@ bool isLedPinAllowed(uint8_t pin) {
   if (pin >= 26 && pin <= 37) return false;                                        // SPI flash + PSRAM (qio_opi)
   if (pin > 48) return false;
 
+#elif defined(BOARD_IS_JC3248W535)
+  // Guition JC3248W535 (AXS15231B QSPI 320x480)
+  if (pin == 21 || pin == 39 || pin == 40 || pin == 45 || pin == 47 || pin == 48) return false; // display QSPI
+  if (pin == 38) return false;                                                     // display TE
+  if (pin == 4 || pin == 8) return false;                                          // touch I2C
+  if (pin == 2 || pin == 41 || pin == 42) return false;                            // NS4168 I2S audio
+  if (pin == 19 || pin == 20) return false;                                        // USB CDC D-/D+
+  if (pin >= 26 && pin <= 37) return false;                                        // SPI flash + PSRAM (qio_opi)
+  if (pin > 48) return false;
+
 #elif defined(BOARD_IS_C3)
   // LOLIN C3 mini
   if (pin == 6 || pin == 7 || pin == 10 || pin == 20 || pin == 21) return false;   // display SPI

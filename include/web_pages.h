@@ -1072,7 +1072,7 @@ html[data-theme="dark"] .topbar::after { opacity: 0.5; }
         <label for="buzpin">Buzzer GPIO pin</label>
         <input type="number" id="buzpin" class="mono" min="1" max="48" value="%BUZ_PIN%" style="max-width:120px">
       </div>
-      <div id="buzEs8311Info" class="hint" style="display:none">Built-in ES8311 I2S audio codec. No GPIO configuration needed.</div>
+      <div id="buzEs8311Info" class="hint" style="display:none">Built-in I2S speaker. No GPIO configuration needed.</div>
       <div class="field">
         <label>Quiet hours (optional)</label>
         <div class="hstack" style="gap:var(--sp-2)">
