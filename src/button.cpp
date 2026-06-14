@@ -8,27 +8,28 @@
   static SPIClass touchSPI(HSPI);
   static XPT2046_Touchscreen ts(TOUCH_CS, TOUCH_IRQ);
   static bool touchReady = false;
-  #if defined(BOARD_IS_TZT_2432)
-    // Phantom-touch tolerance for TZT L1435-2.4 panels (issue #109). A pinched
-    // touch flex can squeeze the resistive layers together, so the XPT2046
-    // reports a constant weak "touch". That ramps and saves the LED brightness
-    // (hold-to-dim) and blocks screensaver wake (no fresh press edge ever
-    // arrives). Scoped to TZT only; CYD panels behave fine on lib defaults.
-    //
-    // Guard 1 - raise the pressure bar. PaulStoffregen's Z_THRESHOLD is 300 and
-    //   some TZT units idle just above it; TFT_eSPI uses 600 and works on these
-    //   boards (confirmed by the reporter), so match that.
-    #ifndef TZT_TOUCH_Z_THRESHOLD
-      #define TZT_TOUCH_Z_THRESHOLD 600
-    #endif
-    // Guard 2 - a contact held longer than any real tap or full hold-to-dim
-    //   sweep (~5 s at 3 duty/20 ms over the 10-255 range) is treated as a
-    //   phantom and ignored until a genuine release is observed, so it can no
-    //   longer drive the LED. Recovers automatically once the panel releases.
-    #ifndef TZT_TOUCH_STUCK_MS
-      #define TZT_TOUCH_STUCK_MS 10000UL
-    #endif
+  // Phantom-touch tolerance for resistive XPT2046 panels - CYD and TZT
+  // L1435-2.4 (issue #109). A pinched touch flex can squeeze the resistive
+  // layers together, so the XPT2046 reports a constant weak "touch" from
+  // power-on. Left unfiltered that ramps and saves the LED brightness to max
+  // (hold-to-dim) within ~2 s and blocks screensaver wake (no fresh press edge
+  // ever arrives). Both guards apply to every XPT2046 board (resistive only);
+  // capacitive panels report clean release between taps and need neither.
+  //
+  // Guard 1 - raise the pressure bar. PaulStoffregen's Z_THRESHOLD is 300; the
+  //   pre-LovyanGFX TFT_eSPI build ran these same panels at 600, so match that
+  //   long-tested value to reject the weakest phantom contacts.
+  #ifndef XPT_TOUCH_Z_THRESHOLD
+    #define XPT_TOUCH_Z_THRESHOLD 600
   #endif
+  // Guard 2 - boot release-gate. A real touch always starts from a released
+  //   panel; a stuck phantom is asserted from the first read and never lets
+  //   go. So ignore all contact until at least one genuine release (no-touch
+  //   read) has been observed since boot. A solid-on phantom is then rejected
+  //   immediately - the LED never ramps, so it cannot be saved to max, and
+  //   wake resumes the instant a real tap+release occurs. Honest limit: a
+  //   phantom that *flickers* below threshold produces a release and re-arms
+  //   touch; that is a wiring short with no robust software fix (see #109).
 #elif defined(USE_CST816)
   #include <Wire.h>
   #define CST816_ADDR          0x15
@@ -368,27 +369,14 @@ bool wasButtonPressed() {
   if (buttonType == BTN_TOUCHSCREEN) {
 #if defined(USE_XPT2046)
     if (!touchReady) return false;
-  #if defined(BOARD_IS_TZT_2432)
-    // Phantom-touch guards for pinched-flex TZT panels (see top of file, #109).
-    bool sensorTouch = (ts.getPoint().z >= TZT_TOUCH_Z_THRESHOLD);
-    static unsigned long touchDownMs = 0;
-    static bool touchStuck = false;
-    unsigned long nowTouch = millis();
-    if (sensorTouch) {
-      if (touchDownMs == 0) touchDownMs = nowTouch;
-      if (!touchStuck && (nowTouch - touchDownMs) > TZT_TOUCH_STUCK_MS) {
-        touchStuck = true;
-        Serial.println("XPT2046: stuck touch detected (phantom), ignoring until release");
-      }
-    } else {
-      if (touchStuck) Serial.println("XPT2046: stuck touch released, touch re-enabled");
-      touchDownMs = 0;
-      touchStuck = false;
+    // Phantom-touch guards for resistive XPT2046 panels (see top of file, #109).
+    bool sensorTouch = (ts.getPoint().z >= XPT_TOUCH_Z_THRESHOLD);
+    static bool touchArmed = false;  // set once a genuine release has been seen
+    if (!sensorTouch) {
+      if (!touchArmed) Serial.println("XPT2046: release seen, touch armed");
+      touchArmed = true;
     }
-    raw = sensorTouch && !touchStuck;
-  #else
-    raw = ts.touched();
-  #endif
+    raw = sensorTouch && touchArmed;
 #elif defined(USE_CST816)
     if (!cst816BusReady) return false;
     uint8_t touchNum = 0;
