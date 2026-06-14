@@ -71,11 +71,11 @@
 #define LY_AMS_BAR_MAX_W  42
 #define LY_AMS_BAR_MAX_W_EXTRAS 42  // JC3248W535 has plenty of width — no need to shrink in extras mode
 
-// --- Battery indicator placeholders ---
-// JC3248W535 has no battery hardware exposed to BambuHelper — shouldShowBatteryIndicator()
-// returns false at runtime, so these are never actually drawn. Defined only so the
-// unconditionally-compiled drawBatteryPrefix/drawWifiSignalIndicator helpers in
-// display_ui.cpp compile on this build. Values mirror layout_default.h scaled up.
+// --- Battery indicator geometry ---
+// Used by JC3248W535 (BAT cell sensed on GPIO5 via the R26/R27 divider) when
+// the indicator is enabled in Settings. ws_lcd_350 has no battery, so there
+// shouldShowBatteryIndicator() returns false and these go unused. Values mirror
+// layout_default.h scaled up.
 #define LY_BAT_W       12
 #define LY_BAT_H       24
 #define LY_BAT_TEXT_X  18
