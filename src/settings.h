@@ -37,6 +37,7 @@ enum GaugeType : uint8_t {
   GAUGE_AMS_BARS_4     = 28,    // AMS unit 4
   GAUGE_NOZZLE_RIGHT   = 29,    // dual-nozzle (H2D/H2C/X2D): right extruder (id 0), fixed side
   GAUGE_NOZZLE_LEFT    = 30,    // dual-nozzle: left extruder (id 1), fixed side
+  GAUGE_POWER          = 31,    // Tasmota smart-plug live power draw (W / kW)
   GAUGE_TYPE_COUNT  // sentinel - always last
 };
 

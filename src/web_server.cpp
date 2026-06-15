@@ -599,6 +599,7 @@ static void handlePrinterConfig() {
   doc["hasAuxFanRight"] = (st.airductFuncs & (1u << 6)) != 0;  // X2D only
   doc["hasExhaustFan"]  = (st.airductFuncs & (1u << 2)) != 0;  // X2D + H2C
   doc["hasDualNozzle"]  = st.dualNozzle;                       // H2D/H2C/X2D per-nozzle temp gauges
+  doc["hasTasmota"]     = tasmotaConfiguredForSlot(slot);      // gates the Power gauge option
   JsonArray slots = doc["gaugeSlots"].to<JsonArray>();
   for (uint8_t g = 0; g < GAUGE_SLOT_COUNT; g++) slots.add(cfg.gaugeSlots[g]);
   JsonArray lext = doc["landscapeExtras"].to<JsonArray>();

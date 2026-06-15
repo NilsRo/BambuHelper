@@ -750,6 +750,95 @@ void drawFanGauge(lgfx::LovyanGFX& gfx, int16_t cx, int16_t cy, int16_t radius,
 }
 
 // ---------------------------------------------------------------------------
+//  Tasmota power gauge (live watts; flips to kW past the full-scale point)
+// ---------------------------------------------------------------------------
+// Arc full-scale. Chosen so the ring pegs full exactly as the readout switches
+// to "kW": full ring <=> kW range. Normal printing (100-300W) fills 10-30%, a
+// bed-heat spike (H2C can hit ~2kW) saturates the arc and the number reads kW.
+#define POWER_GAUGE_FULL_W 1000.0f
+
+void drawPowerGauge(lgfx::LovyanGFX& gfx, int16_t cx, int16_t cy, int16_t radius,
+                    float watts, bool active, const char* label, bool forceRedraw) {
+  ScopedWrite sw(gfx);
+  const uint16_t startAngle = 60;
+  const int16_t thickness = LY_TEMP_GAUGE_T;
+  uint16_t bg = dispSettings.bgColor;
+
+  float w = (active && watts > 0.0f) ? watts : 0.0f;
+  float ratio = w / POWER_GAUGE_FULL_W;
+  if (ratio > 1.0f) ratio = 1.0f;
+
+  uint16_t fillEnd = startAngle + (uint16_t)(ratio * 240.0f);
+  if (fillEnd > 300) fillEnd = 300;
+
+  uint16_t arcColor = (active && w > 0.5f) ? CLR_GOLD : CLR_TEXT_DIM;
+  uint16_t drawFill = (ratio > 0.01f) ? fillEnd : startAngle;
+  drawArcFill(gfx, cx, cy, radius, thickness, drawFill, arcColor, forceRedraw);
+
+  // Build the cached form (full string) and the value/suffix split for drawing.
+  char buf[10], valueBuf[8];
+  const char* suffix;
+  if (!active) {
+    strlcpy(buf, "--", sizeof(buf));
+    valueBuf[0] = '\0';
+    suffix = "";
+  } else if (watts >= 1000.0f) {
+    snprintf(valueBuf, sizeof(valueBuf), "%.1f", watts / 1000.0f);
+    suffix = "kW";
+    snprintf(buf, sizeof(buf), "%s%s", valueBuf, suffix);
+  } else {
+    snprintf(valueBuf, sizeof(valueBuf), "%.0f", w);
+    suffix = "W";
+    snprintf(buf, sizeof(buf), "%s%s", valueBuf, suffix);
+  }
+
+  if (gaugeTextChanged(cx, cy, buf, "", forceRedraw)) {
+    clearGaugeCenter(gfx, cx, cy, radius, thickness);
+
+    if (active) {
+      // Pick the largest value font that leaves room for the suffix inside the
+      // clearable inner circle (mirrors fitHumidityValueFont but measures the
+      // actual "W"/"kW" suffix, which is wider than "%").
+      const int16_t suffixGap = 1;
+      setFont(gfx, FONT_SMALL);
+      const int16_t suffixW = gfx.textWidth(suffix);
+      const int16_t innerW  = 2 * (radius - thickness - 1) - 2;
+      FontID candidates[] = { LY_GAUGE_VALUE_FONT, FONT_LARGE, FONT_BODY, FONT_SMALL };
+      FontID valueFont = FONT_SMALL;
+      for (FontID f : candidates) {
+        if (radius < 30 && (f == FONT_LARGE || f == FONT_XLARGE)) continue;
+        setFont(gfx, f);
+        if (gfx.textWidth(valueBuf) + suffixGap + suffixW <= innerW) { valueFont = f; break; }
+      }
+
+      setFont(gfx, valueFont);
+      const int16_t valueW = gfx.textWidth(valueBuf);
+      const int16_t splitX = cx - (valueW + suffixGap + suffixW) / 2 + valueW;
+
+      gfx.setTextDatum(MR_DATUM);
+      setGaugeClearedTextColor(gfx, CLR_TEXT, bg);
+      gfx.drawString(valueBuf, splitX, cy);
+
+      setFont(gfx, FONT_SMALL);
+      gfx.setTextDatum(ML_DATUM);
+      setGaugeClearedTextColor(gfx, CLR_TEXT, bg);
+      gfx.drawString(suffix, splitX + suffixGap, cy);
+    } else {
+      gfx.setTextDatum(MC_DATUM);
+      fitValueFont(gfx, buf, radius, thickness, LY_GAUGE_VALUE_FONT);
+      setGaugeClearedTextColor(gfx, CLR_TEXT_DIM, bg);
+      gfx.drawString(buf, cx, cy);
+    }
+
+    bool sm = dispSettings.smallLabels;
+    gfx.setTextDatum(MC_DATUM);
+    setFont(gfx, sm ? FONT_SMALL : FONT_BODY);
+    gfx.setTextColor(arcColor, bg);
+    gfx.drawString(label, cx, cy + radius + (sm ? 3 : -1));
+  }
+}
+
+// ---------------------------------------------------------------------------
 //  AMS humidity gauge (percentage from humidityRaw, color from humidity level)
 // ---------------------------------------------------------------------------
 void drawHumidityGauge(lgfx::LovyanGFX& gfx, int16_t cx, int16_t cy, int16_t radius,
