@@ -101,6 +101,16 @@ static void readDisplayFromForm() {
   if (server.hasArg("fmins")) {
     dpSettings.finishDisplayMins = server.arg("fmins").toInt();
   }
+
+  // Gauge full-scale ranges (clamp to safe bounds)
+  if (server.hasArg("noz_max"))
+    dispSettings.nozzleScaleMax  = constrain(server.arg("noz_max").toInt(), GAUGE_NOZZLE_SCALE_MIN, GAUGE_NOZZLE_SCALE_MAX);
+  if (server.hasArg("bed_max"))
+    dispSettings.bedScaleMax     = constrain(server.arg("bed_max").toInt(), GAUGE_BED_SCALE_MIN, GAUGE_BED_SCALE_MAX);
+  if (server.hasArg("cht_max"))
+    dispSettings.chamberScaleMax = constrain(server.arg("cht_max").toInt(), GAUGE_CHAMBER_SCALE_MIN, GAUGE_CHAMBER_SCALE_MAX);
+  if (server.hasArg("pwr_max"))
+    dispSettings.powerScaleW     = constrain(server.arg("pwr_max").toInt(), GAUGE_POWER_SCALE_MIN, GAUGE_POWER_SCALE_MAX);
   dpSettings.keepDisplayOn = server.hasArg("keepon");
   dpSettings.showClockAfterFinish = server.hasArg("clock");
   dpSettings.doorAckEnabled = server.hasArg("dack");
@@ -961,6 +971,10 @@ static void handleSettingsExport() {
   disp["showTimeRemaining"] = dispSettings.showTimeRemaining;
   disp["fanMatchPrinter"] = dispSettings.fanMatchPrinter;
   disp["showBatteryIndicator"] = dispSettings.showBatteryIndicator;
+  disp["nozzleScaleMax"]  = dispSettings.nozzleScaleMax;
+  disp["bedScaleMax"]     = dispSettings.bedScaleMax;
+  disp["chamberScaleMax"] = dispSettings.chamberScaleMax;
+  disp["powerScaleW"]     = dispSettings.powerScaleW;
 
   JsonObject gauges = disp["gauges"].to<JsonObject>();
   JsonObject gPrg = gauges["progress"].to<JsonObject>(); gaugeColorsToJson(gPrg, dispSettings.progress);
@@ -1229,6 +1243,12 @@ static void handleSettingsImportFinish() {
     if (disp["showTimeRemaining"].is<bool>())   dispSettings.showTimeRemaining = disp["showTimeRemaining"].as<bool>();
     if (disp["fanMatchPrinter"].is<bool>())     dispSettings.fanMatchPrinter = disp["fanMatchPrinter"].as<bool>();
     if (disp["showBatteryIndicator"].is<bool>()) dispSettings.showBatteryIndicator = disp["showBatteryIndicator"].as<bool>();
+    // Gauge full-scale ranges: accept any JSON number and clamp (so crafted
+    // out-of-range values are corrected, not silently ignored).
+    if (disp["nozzleScaleMax"].is<int>())  dispSettings.nozzleScaleMax  = constrain(disp["nozzleScaleMax"].as<int>(),  GAUGE_NOZZLE_SCALE_MIN,  GAUGE_NOZZLE_SCALE_MAX);
+    if (disp["bedScaleMax"].is<int>())     dispSettings.bedScaleMax     = constrain(disp["bedScaleMax"].as<int>(),     GAUGE_BED_SCALE_MIN,     GAUGE_BED_SCALE_MAX);
+    if (disp["chamberScaleMax"].is<int>()) dispSettings.chamberScaleMax = constrain(disp["chamberScaleMax"].as<int>(), GAUGE_CHAMBER_SCALE_MIN, GAUGE_CHAMBER_SCALE_MAX);
+    if (disp["powerScaleW"].is<int>())     dispSettings.powerScaleW     = constrain(disp["powerScaleW"].as<int>(),     GAUGE_POWER_SCALE_MIN,   GAUGE_POWER_SCALE_MAX);
     // Legacy disp["amsView"] is consumed in the printers block above as a fallback
     // for slots that don't have their own per-printer value.
 

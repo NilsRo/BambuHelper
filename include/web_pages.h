@@ -78,7 +78,8 @@ function saveWifi(){
 //    Display:  bright, nighten, nstart, nend, nbright, ssbright, afterprint,
 //              fmins, dack, kps, pong, abar, slbl, shtire, fanmp, invcol,
 //              cydcls, rotation, tz, use24h, datefmt, clk_time, clk_date,
-//              clk_size, clk_hidedate, clr_bg, clr_track, clr_pbar, bulk_a/l/v,
+//              clk_size, clk_hidedate, noz_max, bed_max, cht_max, pwr_max,
+//              clr_bg, clr_track, clr_pbar, bulk_a/l/v,
 //              prg/noz/bed/pfn/afn/afr/cfn/exh/cht/hbk + _a/_l/_v
 //    Hardware: rotmode, rotinterval, btntype, btnpin, buzzen (DOUBLE Z!),
 //              buzpin, buzqs, buzqe, buzclick, buzbeden, buzbedtemp, leden,
@@ -1200,6 +1201,15 @@ html[data-theme="dark"] .topbar::after { opacity: 0.5; }
     </label>
   </div>
 
+  <div class="card">
+    <div class="card-head"><div><h3>Gauge scales</h3><p>Full-scale value each arc represents. Lower a scale so the arc sweeps fuller for your printer's normal range. Defaults suit any Bambu printer.</p></div></div>
+    <div class="field"><label for="noz_max">Nozzle full-scale</label><div class="hstack" style="gap:var(--sp-2)"><input type="number" id="noz_max" min="100" max="400" value="%NOZ_MAX%" style="max-width:120px"><span class="text-dim small">&deg;C</span></div></div>
+    <div class="field"><label for="bed_max">Bed full-scale</label><div class="hstack" style="gap:var(--sp-2)"><input type="number" id="bed_max" min="40" max="150" value="%BED_MAX%" style="max-width:120px"><span class="text-dim small">&deg;C</span></div></div>
+    <div class="field"><label for="cht_max">Chamber / AMS temp full-scale</label><div class="hstack" style="gap:var(--sp-2)"><input type="number" id="cht_max" min="30" max="120" value="%CHT_MAX%" style="max-width:120px"><span class="text-dim small">&deg;C</span></div></div>
+    <div class="field"><label for="pwr_max">Power gauge full-scale</label><div class="hstack" style="gap:var(--sp-2)"><input type="number" id="pwr_max" min="100" max="5000" step="50" value="%PWR_MAX%" style="max-width:120px"><span class="text-dim small">W</span></div></div>
+    <button type="button" class="btn btn-primary" onclick="applyDisplay()">Apply Display Settings</button>
+  </div>
+
   <div class="card" style="border-color:rgba(220, 69, 56, 0.30)">
     <div class="card-head"><div><h3 style="color:var(--danger)">Danger zone</h3><p>Destructive operations and experimental settings. Unlock to reveal.</p></div></div>
     <label class="check-row">
@@ -2230,6 +2240,10 @@ function applyDisplay(){
   p.append('clk_date', document.getElementById('clk_date').value);
   p.append('clk_size', document.getElementById('clk_size').value);
   if (document.getElementById('clk_hidedate').checked) p.append('clk_hidedate', '1');
+  p.append('noz_max', document.getElementById('noz_max').value);
+  p.append('bed_max', document.getElementById('bed_max').value);
+  p.append('cht_max', document.getElementById('cht_max').value);
+  p.append('pwr_max', document.getElementById('pwr_max').value);
   for (var i = 0; i < GAUGE_KEYS.length; i++){
     var k = GAUGE_KEYS[i];
     p.append(k + '_a', document.getElementById(k + '_a').value);

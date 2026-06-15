@@ -33,7 +33,7 @@ void drawFanGauge(lgfx::LovyanGFX& gfx, int16_t cx, int16_t cy, int16_t radius,
                   float arcPercent = -1.0f);
 
 // Draw Tasmota power gauge. watts < 1000 renders "200W", >=1000 renders "1.2kW"
-// (unit in a smaller suffix font). Arc fills 0..POWER_GAUGE_FULL_W and saturates.
+// (unit in a smaller suffix font). Arc fills 0..dispSettings.powerScaleW and saturates.
 // active=false (offline/stale plug) renders a dim "--".
 void drawPowerGauge(lgfx::LovyanGFX& gfx, int16_t cx, int16_t cy, int16_t radius,
                     float watts, bool active, const char* label, bool forceRedraw);

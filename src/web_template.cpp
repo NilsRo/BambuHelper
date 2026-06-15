@@ -347,6 +347,12 @@ static bool resolvePlaceholder(const char* name, String& out) {
   if (strcmp(name, "RMODE_SMART") == 0) { out = rotState.mode == ROTATE_SMART ? "selected" : ""; return true; }
   if (strcmp(name, "ROT_INTERVAL") == 0){ out = String(rotState.intervalMs / 1000); return true; }
 
+  // --- Gauge full-scale ranges ---
+  if (strcmp(name, "NOZ_MAX") == 0) { out = String(dispSettings.nozzleScaleMax); return true; }
+  if (strcmp(name, "BED_MAX") == 0) { out = String(dispSettings.bedScaleMax); return true; }
+  if (strcmp(name, "CHT_MAX") == 0) { out = String(dispSettings.chamberScaleMax); return true; }
+  if (strcmp(name, "PWR_MAX") == 0) { out = String(dispSettings.powerScaleW); return true; }
+
   // --- Button ---
   if (strcmp(name, "BTN_OFF") == 0)    { out = buttonType == BTN_DISABLED ? "selected" : ""; return true; }
   if (strcmp(name, "BTN_PUSH") == 0)   { out = buttonType == BTN_PUSH ? "selected" : ""; return true; }

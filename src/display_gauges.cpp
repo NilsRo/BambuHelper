@@ -752,10 +752,10 @@ void drawFanGauge(lgfx::LovyanGFX& gfx, int16_t cx, int16_t cy, int16_t radius,
 // ---------------------------------------------------------------------------
 //  Tasmota power gauge (live watts; flips to kW past the full-scale point)
 // ---------------------------------------------------------------------------
-// Arc full-scale. Chosen so the ring pegs full exactly as the readout switches
-// to "kW": full ring <=> kW range. Normal printing (100-300W) fills 10-30%, a
-// bed-heat spike (H2C can hit ~2kW) saturates the arc and the number reads kW.
-#define POWER_GAUGE_FULL_W 1000.0f
+// Arc full-scale is user-configurable (dispSettings.powerScaleW, default 1000 W).
+// The arc fills 0..powerScaleW and saturates above it. The "W"/"kW" readout split
+// stays at 1000 W (a unit boundary), independent of the arc scale: normal printing
+// (100-300 W) fills a small slice, a bed-heat spike saturates the ring.
 
 void drawPowerGauge(lgfx::LovyanGFX& gfx, int16_t cx, int16_t cy, int16_t radius,
                     float watts, bool active, const char* label, bool forceRedraw) {
@@ -763,9 +763,10 @@ void drawPowerGauge(lgfx::LovyanGFX& gfx, int16_t cx, int16_t cy, int16_t radius
   const uint16_t startAngle = 60;
   const int16_t thickness = LY_TEMP_GAUGE_T;
   uint16_t bg = dispSettings.bgColor;
+  const float fullScale = (float)dispSettings.powerScaleW;
 
   float w = (active && watts > 0.0f) ? watts : 0.0f;
-  float ratio = w / POWER_GAUGE_FULL_W;
+  float ratio = (fullScale > 0.0f) ? (w / fullScale) : 0.0f;
   if (ratio > 1.0f) ratio = 1.0f;
 
   uint16_t fillEnd = startAngle + (uint16_t)(ratio * 240.0f);

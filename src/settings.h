@@ -85,6 +85,12 @@ struct DisplaySettings {
   bool     showClockInfo;  // footer on the idle/clock screen: each configured printer's name + LAN IP
   bool     amsTrayTypes;   // show per-tray filament-type label under AMS bars (portrait strip); off = taller bars, no text
   bool     showBatteryIndicator; // Waveshare boards: show battery icon in status bar
+  // Gauge full-scale ranges (arc maxima). Lowering a scale makes the arc sweep
+  // fuller for a printer's normal range. Defaults suit any Bambu printer.
+  uint16_t nozzleScaleMax;   // C
+  uint16_t bedScaleMax;      // C
+  uint16_t chamberScaleMax;  // C (also drives the AMS unit-temp gauge)
+  uint16_t powerScaleW;      // W (Tasmota power gauge full-scale)
   GaugeColors progress;
   GaugeColors nozzle;
   GaugeColors bed;
