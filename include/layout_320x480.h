@@ -79,6 +79,25 @@
 #define LY_SPLIT_B_ROW1    318
 #define LY_SPLIT_B_ROW2    410
 
+// --- Landscape split (panel rotated to 480x320) -----------------------------
+// Two full-height 240-wide bands side by side, each a 2x2 gauge grid
+// (gaugeSlots[0..3]). Column centres are band-relative (the renderer adds the
+// right band's x offset). R=44 fits the 120px column pitch with room for labels;
+// rows are spread to fill the 320px height between the header and foot line.
+#define LAYOUT_HAS_SPLIT_LANDSCAPE 1
+#define LY_SPLIT_L_SLOTS    4
+#define LY_SPLIT_L_NCOLS    2
+#define LY_SPLIT_L_GAUGE_R  44
+#define LY_SPLIT_L_GAUGE_T  LY_GAUGE_T
+#define LY_SPLIT_L_BAR_H    6
+#define LY_SPLIT_L_BAR_MARGIN 10
+#define LY_SPLIT_L_BAR_Y    12
+#define LY_SPLIT_L_HDR_CY   30
+#define LY_SPLIT_L_ROW1     112
+#define LY_SPLIT_L_ROW2     232
+#define LY_SPLIT_L_COL1     60
+#define LY_SPLIT_L_COL2     180
+
 // --- AMS tray visualization zone (below gauge grid) ---
 // Row 2 gauges bottom edge is at y=276 (228+48). Labels extend ~12px below,
 // so AMS starts at y=295. Zone is 72 px tall with 42 px bars; ETA begins at

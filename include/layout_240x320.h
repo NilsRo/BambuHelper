@@ -68,6 +68,28 @@
 #define LY_SPLIT_B_HDR_CY  186
 #define LY_SPLIT_B_ROW1    250
 
+// --- Landscape split (panel rotated to 320x240) -----------------------------
+// Two full-height 160-wide bands side by side, each a 2x2 gauge grid
+// (gaugeSlots[0..3]). R=28 fits the 76px column pitch in a 160px band. Gated
+// out of the single-printer low-RAM boards (cyd, tzt_2432), where split never
+// engages anyway, so they pay no extra flash. Column centres are band-relative
+// (the renderer adds the right band's x offset).
+#if !defined(BOARD_LOW_RAM)
+#define LAYOUT_HAS_SPLIT_LANDSCAPE 1
+#define LY_SPLIT_L_SLOTS    4
+#define LY_SPLIT_L_NCOLS    2
+#define LY_SPLIT_L_GAUGE_R  28
+#define LY_SPLIT_L_GAUGE_T  LY_GAUGE_T
+#define LY_SPLIT_L_BAR_H    5
+#define LY_SPLIT_L_BAR_MARGIN 8
+#define LY_SPLIT_L_BAR_Y    10
+#define LY_SPLIT_L_HDR_CY   26
+#define LY_SPLIT_L_ROW1     74
+#define LY_SPLIT_L_ROW2     160
+#define LY_SPLIT_L_COL1     42
+#define LY_SPLIT_L_COL2     118
+#endif
+
 // --- AMS tray visualization zone (CYD portrait, between gauges and ETA) ---
 // Gauge row 2 labels extend to ~y=187, so AMS starts at 190 to avoid overlap.
 #define LY_AMS_Y          190   // top of AMS zone (below gauge row 2 labels)

@@ -22,15 +22,27 @@
 
 namespace {
 
+#if defined(LAYOUT_HAS_SPLIT_LANDSCAPE)
+// Mirrors display_ui.cpp isLandscape(): rotations 1/3 swap the panel to a wide
+// orientation, which switches the split to two side-by-side bands.
+bool splitIsLandscape() {
+  return dispSettings.rotation == 1 || dispSettings.rotation == 3;
+}
+#endif
+
 struct BandGeom {
+  int16_t x, w;          // band left edge + width (full width portrait, half landscape)
   int16_t top, height;   // band rect (caller clears on a force frame)
   int16_t hdrCY;         // header text center Y
   int16_t barY;          // progress bar top Y
-  int16_t cols[3];       // gauge column center X
-  int16_t rows[2];       // gauge row center Y (rows[1] unused when slots <= 3)
+  int16_t cols[3];       // gauge column center X (absolute)
+  int16_t rows[2];       // gauge row center Y (rows[1] unused when slots <= ncols)
   int16_t footCY;        // bottom info-line center Y
   int16_t r, t;          // gauge radius, arc thickness
-  uint8_t slots;         // 3 or 6
+  int16_t barH;          // progress bar height
+  int16_t margin;        // left/right inset for header, bar and foot
+  uint8_t slots;         // gauges per band (3 / 6 portrait, 4 landscape)
+  uint8_t ncols;         // columns in the gauge grid (3 portrait, 2 landscape)
 };
 
 // Per-band caches (index 0 = top band, 1 = bottom band).
@@ -229,11 +241,11 @@ void drawBand(const BambuState& s, const PrinterConfig& cfg, uint8_t slotIndex,
     markFrameDirty();
     // On a force frame the whole screen was just cleared; otherwise wipe the
     // text strip so the new name/dot does not overprint the old.
-    if (!force) tft.fillRect(0, g.hdrCY - 9, LY_W, 18, CLR_BG);
+    if (!force) tft.fillRect(g.x, g.hdrCY - 9, g.w, 18, CLR_BG);
 
     // Right: state dot + status word ("Printing" / "Idle" / "Preparing" ...).
     const uint16_t stClr = stateColor(s.gcodeStateId);
-    const int16_t dotCX = LY_W - LY_SPLIT_BAR_MARGIN - 5;
+    const int16_t dotCX = g.x + g.w - g.margin - 5;
     tft.fillCircle(dotCX, g.hdrCY, 5, stClr);
     const char* st = stateLabel(s.gcodeStateId);
     int16_t stLeft = dotCX - 10;   // name still clears the dot when status is empty
@@ -251,19 +263,19 @@ void drawBand(const BambuState& s, const PrinterConfig& cfg, uint8_t slotIndex,
     tft.setTextDatum(ML_DATUM);
     tft.setTextColor(CLR_TEXT, CLR_BG);
     const char* name = (cfg.name[0] != '\0') ? cfg.name : "Printer";
-    const int16_t nameMaxW = stLeft - 4 - LY_SPLIT_BAR_MARGIN;
-    drawClippedName(name, LY_SPLIT_BAR_MARGIN, g.hdrCY, nameMaxW);
+    const int16_t nameMaxW = stLeft - 4 - (g.x + g.margin);
+    drawClippedName(name, g.x + g.margin, g.hdrCY, nameMaxW);
     sPrevHdrState[bandIdx] = s.gcodeStateId;
   }
 
   // --- Thin progress bar under the header ---
   if (force || s.progress != sPrevBarProg[bandIdx]) {
     markFrameDirty();
-    const int16_t bx = LY_SPLIT_BAR_MARGIN;
-    const int16_t bw = LY_W - 2 * LY_SPLIT_BAR_MARGIN;
+    const int16_t bx = g.x + g.margin;
+    const int16_t bw = g.w - 2 * g.margin;
     const int16_t fw = (int16_t)((int32_t)bw * (s.progress > 100 ? 100 : s.progress) / 100);
-    tft.fillRect(bx, g.barY, bw, LY_SPLIT_BAR_H, tft.color565(40, 40, 40));
-    if (fw > 0) tft.fillRect(bx, g.barY, fw, LY_SPLIT_BAR_H, dispSettings.progress.arc);
+    tft.fillRect(bx, g.barY, bw, g.barH, tft.color565(40, 40, 40));
+    if (fw > 0) tft.fillRect(bx, g.barY, fw, g.barH, dispSettings.progress.arc);
     sPrevBarProg[bandIdx] = s.progress;
   }
 
@@ -271,8 +283,8 @@ void drawBand(const BambuState& s, const PrinterConfig& cfg, uint8_t slotIndex,
   for (uint8_t si = 0; si < g.slots; si++) {
     uint8_t gt = cfg.gaugeSlots[si];
     if (gt >= GAUGE_TYPE_COUNT) gt = GAUGE_EMPTY;
-    const int16_t cx = g.cols[si % 3];
-    const int16_t cy = g.rows[si / 3];
+    const int16_t cx = g.cols[si % g.ncols];
+    const int16_t cy = g.rows[si / g.ncols];
 
     const bool typeChanged = (gt != sPrevTypes[bandIdx][si]);
     if (typeChanged) {
@@ -321,17 +333,18 @@ void drawBand(const BambuState& s, const PrinterConfig& cfg, uint8_t slotIndex,
       markFrameDirty();
       strlcpy(sPrevFootCenter[bandIdx], cbuf, sizeof(sPrevFootCenter[bandIdx]));
       const int16_t fy = g.footCY;
-      tft.fillRect(0, fy - 8, LY_W, 16, CLR_BG);
+      const int16_t fcx = g.x + g.w / 2;
+      tft.fillRect(g.x, fy - 8, g.w, 16, CLR_BG);
       setFont(tft, FONT_SMALL);
 
       // Centre string drawn first so the left filament label can clamp to it.
-      const int16_t centerLeft = LY_W / 2 - tft.textWidth(cbuf) / 2;
+      const int16_t centerLeft = fcx - tft.textWidth(cbuf) / 2;
       tft.setTextDatum(MC_DATUM);
       tft.setTextColor(CLR_TEXT_DIM, CLR_BG);
-      tft.drawString(cbuf, LY_W / 2, fy);
+      tft.drawString(cbuf, fcx, fy);
 
       // Left: active filament swatch + type (or nothing if no AMS).
-      const int16_t lx = LY_SPLIT_BAR_MARGIN;
+      const int16_t lx = g.x + g.margin;
       uint16_t swColor = 0;
       const char* swType = nullptr;
       if (s.ams.present && s.ams.activeTray < AMS_MAX_TRAYS &&
@@ -358,8 +371,8 @@ void drawBand(const BambuState& s, const PrinterConfig& cfg, uint8_t slotIndex,
         uint16_t clr = s.doorOpen ? CLR_ORANGE : CLR_GREEN;
         tft.setTextDatum(MR_DATUM);
         tft.setTextColor(clr, CLR_BG);
-        tft.drawString("Door", LY_W - LY_SPLIT_BAR_MARGIN - 18, fy);
-        drawIcon16(tft, LY_W - LY_SPLIT_BAR_MARGIN - 16, fy - 8,
+        tft.drawString("Door", g.x + g.w - g.margin - 18, fy);
+        drawIcon16(tft, g.x + g.w - g.margin - 16, fy - 8,
                    s.doorOpen ? icon_unlock : icon_lock, clr);
       }
     }
@@ -380,6 +393,56 @@ void drawSplit() {
   if (b >= MAX_PRINTERS || b == a) b = (a == 0) ? 1 : 0;
 
   BandGeom ga, gb;
+
+#if defined(LAYOUT_HAS_SPLIT_LANDSCAPE)
+  if (splitIsLandscape()) {
+    // Left/right split (panel rotated to landscape). Two full-height bands side
+    // by side, each a 2x2 gauge grid reusing gaugeSlots[0..3]. Same per-band
+    // anatomy as portrait: bar on top, name+status beneath, gauges, foot line.
+    const int16_t W = (int16_t)tft.width();
+    const int16_t H = (int16_t)tft.height();
+    const int16_t halfW = W / 2;
+
+    // Left band stops 1px short of the divider; right band starts 1px past it,
+    // so neither band's header/foot clear strip overwrites the divider column.
+    ga.x = 0;         ga.w = halfW;
+    gb.x = halfW + 1; gb.w = W - halfW - 1;
+    ga.top = gb.top = 0;
+    ga.height = gb.height = H;
+    ga.r = gb.r = LY_SPLIT_L_GAUGE_R;
+    ga.t = gb.t = LY_SPLIT_L_GAUGE_T;
+    ga.slots = gb.slots = LY_SPLIT_L_SLOTS;
+    ga.ncols = gb.ncols = LY_SPLIT_L_NCOLS;
+    ga.barH = gb.barH = LY_SPLIT_L_BAR_H;
+    ga.margin = gb.margin = LY_SPLIT_L_BAR_MARGIN;
+    ga.barY = gb.barY = LY_SPLIT_L_BAR_Y;
+    ga.hdrCY = gb.hdrCY = LY_SPLIT_L_HDR_CY;
+    ga.rows[0] = gb.rows[0] = LY_SPLIT_L_ROW1;
+    ga.rows[1] = gb.rows[1] = LY_SPLIT_L_ROW2;
+    // Columns are band-relative; offset the right band by its left edge.
+    ga.cols[0] = LY_SPLIT_L_COL1;         ga.cols[1] = LY_SPLIT_L_COL2;
+    gb.cols[0] = gb.x + LY_SPLIT_L_COL1;  gb.cols[1] = gb.x + LY_SPLIT_L_COL2;
+    ga.cols[2] = gb.cols[2] = 0;          // unused (ncols == 2)
+    ga.footCY = gb.footCY = H - 12;
+
+    // Vertical divider between the two bands. The screen is already cleared on a
+    // force frame, so draw it only then.
+    if (force) {
+      tft.drawFastVLine(halfW, 0, H, tft.color565(40, 40, 40));
+    }
+
+    drawBand(printers[a].state, printers[a].config, a, ga, 0, force);
+    drawBand(printers[b].state, printers[b].config, b, gb, 1, force);
+    return;
+  }
+#endif
+
+  // Portrait: two stacked full-width bands.
+  ga.x = gb.x = 0;
+  ga.w = gb.w = LY_W;
+  ga.ncols = gb.ncols = 3;
+  ga.barH = gb.barH = LY_SPLIT_BAR_H;
+  ga.margin = gb.margin = LY_SPLIT_BAR_MARGIN;
   ga.cols[0] = gb.cols[0] = LY_COL1;
   ga.cols[1] = gb.cols[1] = LY_COL2;
   ga.cols[2] = gb.cols[2] = LY_COL3;

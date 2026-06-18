@@ -237,11 +237,16 @@ static inline int16_t uiH() { return SCREEN_H; }
 static inline bool landBottomBarFullWidth(uint8_t) { return true; }
 #endif
 
-// Split (dual-printer) screen is only offered on portrait profiles that define
-// LAYOUT_HAS_SPLIT, and only while not in a landscape rotation. Compiled-out
-// boards (e.g. 480x480 SenseCAP) return false so the feature stays inert.
+// Split (dual-printer) screen is offered on profiles that define
+// LAYOUT_HAS_SPLIT. Portrait gives stacked top/bottom bands; layouts that also
+// define LAYOUT_HAS_SPLIT_LANDSCAPE add a side-by-side left/right variant, so
+// the split survives a landscape rotation there. Layouts without the landscape
+// variant keep the portrait-only restriction. Compiled-out boards (e.g. 480x480
+// SenseCAP) return false so the feature stays inert.
 bool displaySupportsSplit() {
-#if defined(LAYOUT_HAS_SPLIT)
+#if defined(LAYOUT_HAS_SPLIT) && defined(LAYOUT_HAS_SPLIT_LANDSCAPE)
+  return true;
+#elif defined(LAYOUT_HAS_SPLIT)
   return !isLandscape();
 #else
   return false;
