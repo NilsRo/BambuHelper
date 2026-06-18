@@ -56,14 +56,16 @@
 #define LY_SPLIT_GAUGE_T   LY_GAUGE_T
 #define LY_SPLIT_BAR_H     5
 #define LY_SPLIT_BAR_MARGIN 8
-// Band A (top, y 0..159)
+// Band A (top, y 0..159). Gauge row vertically centred in the area below the
+// progress bar (R is capped at 34 by the 78px column pitch, so centring is the
+// only lever to fill the 160px band - a larger R would collide horizontally).
 #define LY_SPLIT_A_HDR_CY  14
 #define LY_SPLIT_A_BAR_Y   28
-#define LY_SPLIT_A_ROW1    82
-// Band B (bottom, y 160..319)
+#define LY_SPLIT_A_ROW1    90
+// Band B (bottom, y 160..319) = Band A + 160
 #define LY_SPLIT_B_HDR_CY  174
 #define LY_SPLIT_B_BAR_Y   188
-#define LY_SPLIT_B_ROW1    242
+#define LY_SPLIT_B_ROW1    250
 
 // --- AMS tray visualization zone (CYD portrait, between gauges and ETA) ---
 // Gauge row 2 labels extend to ~y=187, so AMS starts at 190 to avoid overlap.

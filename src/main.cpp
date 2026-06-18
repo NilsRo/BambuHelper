@@ -453,8 +453,10 @@ static void updateDisplayedPrinterScreenState() {
       rotState.displayIndex = a;
       rotState.splitIndexB  = b;
       if (pairChanged) triggerDisplayTransition();  // clear caches for the new pair
+      // Wake the panel only on entry (night dimming stays handled by
+      // checkNightMode()); avoids a redundant backlight write every loop.
+      if (current != SCREEN_SPLIT) setBacklight(getEffectiveBrightness());
       setScreenState(SCREEN_SPLIT);
-      setBacklight(getEffectiveBrightness());
       finishActive = false;
       idleClockActive = false;
       return;

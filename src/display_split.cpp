@@ -39,6 +39,22 @@ uint8_t    sPrevHdrState[2] = { 0xFF, 0xFF };
 uint8_t    sPrevBarProg[2]  = { 0xFF, 0xFF };
 BambuState sPrevState[2];
 
+// Draw the printer name left-aligned at (x, cy), trimming with a ".." suffix if
+// it would run into the state dot. Assumes the caller already set the font.
+void drawClippedName(const char* name, int16_t x, int16_t cy, int16_t maxW) {
+  if (tft.textWidth(name) <= maxW) { tft.drawString(name, x, cy); return; }
+  char buf[28];
+  strlcpy(buf, name, sizeof(buf));
+  int n = (int)strlen(buf);
+  while (n > 1) {
+    buf[--n] = '\0';
+    char tmp[30];
+    snprintf(tmp, sizeof(tmp), "%s..", buf);
+    if (tft.textWidth(tmp) <= maxW) { tft.drawString(tmp, x, cy); return; }
+  }
+  tft.drawString(buf, x, cy);
+}
+
 uint16_t stateColor(uint8_t gid) {
   switch (gid) {
     case GCODE_RUNNING: return CLR_GREEN;
@@ -202,7 +218,9 @@ void drawBand(const BambuState& s, const PrinterConfig& cfg, uint8_t slotIndex,
     tft.setTextDatum(ML_DATUM);
     tft.setTextColor(CLR_TEXT, CLR_BG);
     const char* name = (cfg.name[0] != '\0') ? cfg.name : "Printer";
-    tft.drawString(name, LY_SPLIT_BAR_MARGIN, g.hdrCY);
+    // Name occupies from the left margin up to ~4px left of the state dot.
+    const int16_t nameMaxW = LY_W - 2 * LY_SPLIT_BAR_MARGIN - 14;
+    drawClippedName(name, LY_SPLIT_BAR_MARGIN, g.hdrCY, nameMaxW);
     tft.fillCircle(LY_W - LY_SPLIT_BAR_MARGIN - 5, g.hdrCY, 5, stateColor(s.gcodeStateId));
     sPrevHdrState[bandIdx] = s.gcodeStateId;
   }
