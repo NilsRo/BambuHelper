@@ -728,6 +728,9 @@ static void handleSaveRotation() {
   if (server.hasArg("rotsplit")) {
     rotState.splitEnabled = (server.arg("rotsplit") == "1");
   }
+  if (server.hasArg("rotsplitf")) {
+    rotState.splitForce = (server.arg("rotsplitf") == "1");
+  }
   saveRotationSettings();
 
   // Button settings
@@ -1045,6 +1048,7 @@ static void handleSettingsExport() {
   rot["mode"] = (uint8_t)rotState.mode;
   rot["intervalMs"] = rotState.intervalMs;
   rot["split"] = rotState.splitEnabled;
+  rot["splitForce"] = rotState.splitForce;
 
   // Button
   JsonObject btn = doc["button"].to<JsonObject>();
@@ -1341,6 +1345,7 @@ static void handleSettingsImportFinish() {
     if (rot["mode"].is<uint8_t>())      rotState.mode = (RotateMode)rot["mode"].as<uint8_t>();
     if (rot["intervalMs"].is<uint32_t>()) rotState.intervalMs = rot["intervalMs"].as<uint32_t>();
     if (rot["split"].is<bool>())        rotState.splitEnabled = rot["split"].as<bool>();
+    if (rot["splitForce"].is<bool>())   rotState.splitForce = rot["splitForce"].as<bool>();
   }
 
   // Button

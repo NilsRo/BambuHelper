@@ -469,6 +469,7 @@ void loadSettings() {
   if (rotState.intervalMs < ROTATE_MIN_MS) rotState.intervalMs = ROTATE_MIN_MS;
   if (rotState.intervalMs > ROTATE_MAX_MS) rotState.intervalMs = ROTATE_MAX_MS;
   rotState.splitEnabled = prefs.getBool("rot_split", false);
+  rotState.splitForce = prefs.getBool("rot_splitf", false);
   rotState.displayIndex = 0;
   rotState.splitIndexB = 1;
   rotState.lastRotateMs = 0;
@@ -767,6 +768,7 @@ void saveRotationSettings() {
   prefs.putUChar("rot_mode", rotState.mode);
   prefs.putULong("rot_intv", rotState.intervalMs);
   prefs.putBool("rot_split", rotState.splitEnabled);
+  prefs.putBool("rot_splitf", rotState.splitForce);
   prefs.end();
 }
 

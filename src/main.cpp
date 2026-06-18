@@ -440,14 +440,27 @@ static void updateDisplayedPrinterScreenState() {
   // with the rotation mode - below 2 active printers the normal single-printer
   // logic runs. Suppressed during a display hold so a fresh finish / manual peek
   // keeps its single-printer screen for one interval.
-  if (rotState.splitEnabled && displaySupportsSplit() && !displayHold) {
-    uint8_t active[MAX_ACTIVE_PRINTERS];
-    uint8_t activeCount = 0;
-    for (uint8_t i = 0; i < MAX_ACTIVE_PRINTERS; i++) {
-      if (isPrinterActiveForDisplay(i)) active[activeCount++] = i;
+  if ((rotState.splitEnabled || rotState.splitForce) && displaySupportsSplit() && !displayHold) {
+    uint8_t a = 0, b = 0;
+    bool engage = false;
+    if (rotState.splitForce) {
+      // Testing override: always split the first two configured slots, even
+      // when idle/disconnected, so the layout can be checked without two prints.
+      uint8_t cfg[MAX_ACTIVE_PRINTERS];
+      uint8_t cfgCount = 0;
+      for (uint8_t i = 0; i < MAX_ACTIVE_PRINTERS; i++) {
+        if (isPrinterConfigured(i)) cfg[cfgCount++] = i;
+      }
+      if (cfgCount >= 2) { a = cfg[0]; b = cfg[1]; engage = true; }
+    } else {
+      uint8_t active[MAX_ACTIVE_PRINTERS];
+      uint8_t activeCount = 0;
+      for (uint8_t i = 0; i < MAX_ACTIVE_PRINTERS; i++) {
+        if (isPrinterActiveForDisplay(i)) active[activeCount++] = i;
+      }
+      if (activeCount >= 2) { a = active[0]; b = active[1]; engage = true; }
     }
-    if (activeCount >= 2) {
-      uint8_t a = active[0], b = active[1];
+    if (engage) {
       bool pairChanged = (current != SCREEN_SPLIT) ||
                          (rotState.displayIndex != a) || (rotState.splitIndexB != b);
       rotState.displayIndex = a;
