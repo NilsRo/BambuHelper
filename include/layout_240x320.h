@@ -59,14 +59,15 @@
 // Band A (top, y 0..159). Gauge row vertically centred in the area below the
 // progress bar (R is capped at 34 by the 78px column pitch, so centring is the
 // only lever to fill the 160px band - a larger R would collide horizontally).
-// progress bar on top, name row beneath it
+// progress bar on top, name row beneath it; gauges nudged up to clear the ETA
+// line that sits just above the foot.
 #define LY_SPLIT_A_BAR_Y   10
 #define LY_SPLIT_A_HDR_CY  26
-#define LY_SPLIT_A_ROW1    90
+#define LY_SPLIT_A_ROW1    74
 // Band B (bottom, y 160..319) = Band A + 160
 #define LY_SPLIT_B_BAR_Y   170
 #define LY_SPLIT_B_HDR_CY  186
-#define LY_SPLIT_B_ROW1    250
+#define LY_SPLIT_B_ROW1    234
 
 // --- Landscape split (panel rotated to 320x240) -----------------------------
 // Two full-height 160-wide bands side by side, each a 2x2 gauge grid
@@ -84,8 +85,9 @@
 #define LY_SPLIT_L_BAR_MARGIN 8
 #define LY_SPLIT_L_BAR_Y    10
 #define LY_SPLIT_L_HDR_CY   26
-#define LY_SPLIT_L_ROW1     74
-#define LY_SPLIT_L_ROW2     160
+// Rows sit just below the name; the freed lower space holds a larger ETA line.
+#define LY_SPLIT_L_ROW1     64
+#define LY_SPLIT_L_ROW2     142
 #define LY_SPLIT_L_COL1     42
 #define LY_SPLIT_L_COL2     118
 #endif

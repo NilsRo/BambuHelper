@@ -93,8 +93,9 @@
 #define LY_SPLIT_L_BAR_MARGIN 10
 #define LY_SPLIT_L_BAR_Y    12
 #define LY_SPLIT_L_HDR_CY   30
-#define LY_SPLIT_L_ROW1     112
-#define LY_SPLIT_L_ROW2     232
+// Rows sit just below the name; the freed lower space holds a larger ETA line.
+#define LY_SPLIT_L_ROW1     92
+#define LY_SPLIT_L_ROW2     192
 #define LY_SPLIT_L_COL1     60
 #define LY_SPLIT_L_COL2     180
 

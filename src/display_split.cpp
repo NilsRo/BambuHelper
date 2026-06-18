@@ -12,6 +12,7 @@
 #include "fonts.h"           // setFont, FontID
 #include "tasmota.h"         // tasmotaGetWattsForSlot / tasmotaIsActiveForSlot
 #include <string.h>
+#include <time.h>
 
 // Match display_ui.cpp / display_anim.cpp: themed background, not the literal
 // black CLR_BG from config.h.
@@ -38,6 +39,8 @@ struct BandGeom {
   int16_t cols[3];       // gauge column center X (absolute)
   int16_t rows[2];       // gauge row center Y (rows[1] unused when slots <= ncols)
   int16_t footCY;        // bottom info-line center Y
+  int16_t etaCY;         // dedicated ETA line center Y; 0 = fold ETA into the foot
+  FontID  etaFont;       // font for the dedicated ETA line
   int16_t r, t;          // gauge radius, arc thickness
   int16_t barH;          // progress bar height
   int16_t margin;        // left/right inset for header, bar and foot
@@ -52,7 +55,46 @@ uint32_t   sPrevAirduct[2]  = { 0xFFFFFFFFu, 0xFFFFFFFFu };
 uint8_t    sPrevHdrState[2] = { 0xFF, 0xFF };
 uint8_t    sPrevBarProg[2]  = { 0xFF, 0xFF };
 char       sPrevFootCenter[2][20] = { { 0 }, { 0 } };
+char       sPrevEta[2][24] = { { 0 }, { 0 } };
 BambuState sPrevState[2];
+
+// Build the ETA / remaining string the same way the single-printer view does
+// (display_ui.cpp): wall-clock finish time when the user prefers it and NTP is
+// up, otherwise the remaining duration. Returns false when there is nothing to
+// show (not printing / no estimate) so the caller can render a dim placeholder.
+bool buildSplitEta(const BambuState& s, char* buf, size_t n) {
+  if (s.remainingMinutes == 0) return false;
+  time_t nowEpoch = time(nullptr);
+  struct tm now;
+  localtime_r(&nowEpoch, &now);
+  const bool ntpSynced = now.tm_year > (2020 - 1900);
+
+  if (!dispSettings.showTimeRemaining && ntpSynced) {
+    time_t etaEpoch = nowEpoch + (time_t)s.remainingMinutes * 60;
+    struct tm e;
+    localtime_r(&etaEpoch, &e);
+    int eh = e.tm_hour;
+    const char* ampm = "";
+    if (!netSettings.use24h) { ampm = eh < 12 ? "AM" : "PM"; eh %= 12; if (eh == 0) eh = 12; }
+    if (e.tm_yday != now.tm_yday || e.tm_year != now.tm_year) {
+      if (netSettings.use24h)
+        snprintf(buf, n, "ETA: %02d.%02d. %02d:%02d", e.tm_mday, e.tm_mon + 1, eh, e.tm_min);
+      else
+        snprintf(buf, n, "ETA: %02d/%02d %d:%02d%s", e.tm_mon + 1, e.tm_mday, eh, e.tm_min, ampm);
+    } else {
+      if (netSettings.use24h)
+        snprintf(buf, n, "ETA: %02d:%02d", eh, e.tm_min);
+      else
+        snprintf(buf, n, "ETA: %d:%02d %s", eh, e.tm_min, ampm);
+    }
+  } else {
+    // showTimeRemaining set, or NTP not synced yet: show the duration. No
+    // "Remaining:" prefix - the progress gauge already labels this context and
+    // the narrow landscape bands are tight.
+    snprintf(buf, n, "%dh %02dm", s.remainingMinutes / 60, s.remainingMinutes % 60);
+  }
+  return true;
+}
 
 // Draw the printer name left-aligned at (x, cy), trimming with a ".." suffix if
 // it would run into the state dot. Assumes the caller already set the font.
@@ -314,66 +356,107 @@ void drawBand(const BambuState& s, const PrinterConfig& cfg, uint8_t slotIndex,
     drawTile(gt, s, slotIndex, cx, cy, g.r, g.t, force || typeChanged);
   }
 
-  // --- Bottom info line: filament swatch + layers/power + door (mirrors the
-  // single-printer bottom bar, compacted into the free space below the gauges) ---
+  // --- ETA line + bottom info line ---
   {
-    char cbuf[20];
-    const float w = tasmotaGetWattsForSlot(slotIndex);
-    if (tasmotaIsActiveForSlot(slotIndex) && w > 0.5f) {
-      snprintf(cbuf, sizeof(cbuf), "%.0fW", w);
-    } else {
-      snprintf(cbuf, sizeof(cbuf), "%d/%d", s.layerNum, s.totalLayers);
+    // Active-tray filament swatch (shown in both foot variants).
+    uint16_t swColor = 0;
+    const char* swType = nullptr;
+    if (s.ams.present && s.ams.activeTray < AMS_MAX_TRAYS &&
+        s.ams.trays[s.ams.activeTray].present) {
+      swColor = s.ams.trays[s.ams.activeTray].colorRgb565;
+      swType  = s.ams.trays[s.ams.activeTray].type;
+    } else if (s.ams.vtPresent && s.ams.activeTray == 254) {
+      swColor = s.ams.vtColorRgb565;
+      swType  = s.ams.vtType;
     }
-    bool footChanged = force
-      || s.doorOpen != prev.doorOpen
-      || s.doorSensorPresent != prev.doorSensorPresent
-      || s.ams.activeTray != prev.ams.activeTray
-      || strcmp(cbuf, sPrevFootCenter[bandIdx]) != 0;
-    if (footChanged) {
-      markFrameDirty();
-      strlcpy(sPrevFootCenter[bandIdx], cbuf, sizeof(sPrevFootCenter[bandIdx]));
-      const int16_t fy = g.footCY;
-      const int16_t fcx = g.x + g.w / 2;
-      tft.fillRect(g.x, fy - 8, g.w, 16, CLR_BG);
-      setFont(tft, FONT_SMALL);
 
-      // Centre string drawn first so the left filament label can clamp to it.
-      const int16_t centerLeft = fcx - tft.textWidth(cbuf) / 2;
-      tft.setTextDatum(MC_DATUM);
-      tft.setTextColor(CLR_TEXT_DIM, CLR_BG);
-      tft.drawString(cbuf, fcx, fy);
+    char etaStr[24];
+    const bool hasEta = buildSplitEta(s, etaStr, sizeof(etaStr));
+    if (!hasEta) strlcpy(etaStr, "ETA: --", sizeof(etaStr));
+    const uint16_t etaClr = hasEta ? CLR_GREEN : CLR_TEXT_DIM;
 
-      // Left: active filament swatch + type (or nothing if no AMS).
-      const int16_t lx = g.x + g.margin;
-      uint16_t swColor = 0;
-      const char* swType = nullptr;
-      if (s.ams.present && s.ams.activeTray < AMS_MAX_TRAYS &&
-          s.ams.trays[s.ams.activeTray].present) {
-        swColor = s.ams.trays[s.ams.activeTray].colorRgb565;
-        swType  = s.ams.trays[s.ams.activeTray].type;
-      } else if (s.ams.vtPresent && s.ams.activeTray == 254) {
-        swColor = s.ams.vtColorRgb565;
-        swType  = s.ams.vtType;
+    if (g.etaCY > 0) {
+      // --- Roomy: dedicated ETA line, plus the full foot bar below it. ---
+      if (force || strcmp(etaStr, sPrevEta[bandIdx]) != 0) {
+        markFrameDirty();
+        strlcpy(sPrevEta[bandIdx], etaStr, sizeof(sPrevEta[bandIdx]));
+        setFont(tft, g.etaFont);
+        const int16_t eh = tft.fontHeight();
+        tft.fillRect(g.x, g.etaCY - eh / 2 - 1, g.w, eh + 2, CLR_BG);
+        tft.setTextDatum(MC_DATUM);
+        tft.setTextColor(etaClr, CLR_BG);
+        tft.drawString(etaStr, g.x + g.w / 2, g.etaCY);
       }
-      if (swType) {
-        tft.drawCircle(lx + 5, fy, 5, CLR_TEXT_DARK);
-        tft.fillCircle(lx + 5, fy, 4, swColor);
-        const int16_t typeMaxW = centerLeft - 3 - (lx + 14);
-        if (typeMaxW > 12) {
-          tft.setTextDatum(ML_DATUM);
-          tft.setTextColor(CLR_TEXT_DIM, CLR_BG);
-          drawClippedName(swType, lx + 14, fy, typeMaxW);
+
+      // Foot bar: filament swatch + type (left), layers/power (centre), door (right).
+      char cbuf[20];
+      const float w = tasmotaGetWattsForSlot(slotIndex);
+      if (tasmotaIsActiveForSlot(slotIndex) && w > 0.5f) {
+        snprintf(cbuf, sizeof(cbuf), "%.0fW", w);
+      } else {
+        snprintf(cbuf, sizeof(cbuf), "%d/%d", s.layerNum, s.totalLayers);
+      }
+      bool footChanged = force
+        || s.doorOpen != prev.doorOpen
+        || s.doorSensorPresent != prev.doorSensorPresent
+        || s.ams.activeTray != prev.ams.activeTray
+        || strcmp(cbuf, sPrevFootCenter[bandIdx]) != 0;
+      if (footChanged) {
+        markFrameDirty();
+        strlcpy(sPrevFootCenter[bandIdx], cbuf, sizeof(sPrevFootCenter[bandIdx]));
+        const int16_t fy = g.footCY;
+        const int16_t fcx = g.x + g.w / 2;
+        tft.fillRect(g.x, fy - 8, g.w, 16, CLR_BG);
+        setFont(tft, FONT_SMALL);
+
+        // Centre string drawn first so the left filament label can clamp to it.
+        const int16_t centerLeft = fcx - tft.textWidth(cbuf) / 2;
+        tft.setTextDatum(MC_DATUM);
+        tft.setTextColor(CLR_TEXT_DIM, CLR_BG);
+        tft.drawString(cbuf, fcx, fy);
+
+        const int16_t lx = g.x + g.margin;
+        if (swType) {
+          tft.drawCircle(lx + 5, fy, 5, CLR_TEXT_DARK);
+          tft.fillCircle(lx + 5, fy, 4, swColor);
+          const int16_t typeMaxW = centerLeft - 3 - (lx + 14);
+          if (typeMaxW > 12) {
+            tft.setTextDatum(ML_DATUM);
+            tft.setTextColor(CLR_TEXT_DIM, CLR_BG);
+            drawClippedName(swType, lx + 14, fy, typeMaxW);
+          }
+        }
+
+        if (s.doorSensorPresent) {
+          uint16_t clr = s.doorOpen ? CLR_ORANGE : CLR_GREEN;
+          tft.setTextDatum(MR_DATUM);
+          tft.setTextColor(clr, CLR_BG);
+          tft.drawString("Door", g.x + g.w - g.margin - 18, fy);
+          drawIcon16(tft, g.x + g.w - g.margin - 16, fy - 8,
+                     s.doorOpen ? icon_unlock : icon_lock, clr);
         }
       }
-
-      // Right: door status (only when the printer has a door sensor).
-      if (s.doorSensorPresent) {
-        uint16_t clr = s.doorOpen ? CLR_ORANGE : CLR_GREEN;
-        tft.setTextDatum(MR_DATUM);
-        tft.setTextColor(clr, CLR_BG);
-        tft.drawString("Door", g.x + g.w - g.margin - 18, fy);
-        drawIcon16(tft, g.x + g.w - g.margin - 16, fy - 8,
-                   s.doorOpen ? icon_unlock : icon_lock, clr);
+    } else {
+      // --- Cramped: foot = colour swatch + ETA only (no type / layers / door),
+      // so a long multi-day ETA gets the full band width. ---
+      bool footChanged = force
+        || s.ams.activeTray != prev.ams.activeTray
+        || strcmp(etaStr, sPrevEta[bandIdx]) != 0;
+      if (footChanged) {
+        markFrameDirty();
+        strlcpy(sPrevEta[bandIdx], etaStr, sizeof(sPrevEta[bandIdx]));
+        const int16_t fy = g.footCY;
+        setFont(tft, g.etaFont);
+        const int16_t eh = tft.fontHeight();
+        tft.fillRect(g.x, fy - eh / 2 - 1, g.w, eh + 2, CLR_BG);
+        if (swType) {
+          const int16_t lx = g.x + g.margin;
+          tft.drawCircle(lx + 5, fy, 5, CLR_TEXT_DARK);
+          tft.fillCircle(lx + 5, fy, 4, swColor);
+        }
+        tft.setTextDatum(MC_DATUM);
+        tft.setTextColor(etaClr, CLR_BG);
+        tft.drawString(etaStr, g.x + g.w / 2, fy);
       }
     }
   }
@@ -424,6 +507,14 @@ void drawSplit() {
     gb.cols[0] = gb.x + LY_SPLIT_L_COL1;  gb.cols[1] = gb.x + LY_SPLIT_L_COL2;
     ga.cols[2] = gb.cols[2] = 0;          // unused (ncols == 2)
     ga.footCY = gb.footCY = H - 12;
+    // Gauges sit just below the name; the freed space below them holds a larger
+    // dedicated ETA line above the foot.
+    ga.etaCY = gb.etaCY = (H - 12) - 28;
+#if defined(DISPLAY_320x480)
+    ga.etaFont = gb.etaFont = FONT_LARGE;
+#else
+    ga.etaFont = gb.etaFont = FONT_BODY;
+#endif
 
     // Vertical divider between the two bands. The screen is already cleared on a
     // force frame, so draw it only then.
@@ -455,6 +546,15 @@ void drawSplit() {
   gb.hdrCY = LY_SPLIT_B_HDR_CY; gb.barY = LY_SPLIT_B_BAR_Y; gb.rows[0] = LY_SPLIT_B_ROW1;
   ga.footCY = ga.top + ga.height - 12;
   gb.footCY = gb.top + gb.height - 12;
+  // Portrait split: one bottom line per band (filament swatch + ETA only, no
+  // type/layers/door) so the ETA stays large and legible. 240x320 has room for
+  // a BODY-size ETA; the tiny 240x240 and the gauge-packed 320x480 stay SMALL.
+  ga.etaCY = gb.etaCY = 0;
+#if defined(DISPLAY_240x320)
+  ga.etaFont = gb.etaFont = FONT_BODY;
+#else
+  ga.etaFont = gb.etaFont = FONT_SMALL;
+#endif
 #if LY_SPLIT_SLOTS >= 6
   ga.rows[1] = LY_SPLIT_A_ROW2;
   gb.rows[1] = LY_SPLIT_B_ROW2;
