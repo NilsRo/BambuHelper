@@ -63,11 +63,11 @@
 // line that sits just above the foot.
 #define LY_SPLIT_A_BAR_Y   10
 #define LY_SPLIT_A_HDR_CY  26
-#define LY_SPLIT_A_ROW1    74
+#define LY_SPLIT_A_ROW1    82
 // Band B (bottom, y 160..319) = Band A + 160
 #define LY_SPLIT_B_BAR_Y   170
 #define LY_SPLIT_B_HDR_CY  186
-#define LY_SPLIT_B_ROW1    234
+#define LY_SPLIT_B_ROW1    242
 
 // --- Landscape split (panel rotated to 320x240) -----------------------------
 // Two full-height 160-wide bands side by side, each a 2x2 gauge grid
