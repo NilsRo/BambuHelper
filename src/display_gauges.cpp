@@ -475,13 +475,25 @@ static void clearGaugeCenter(lgfx::LovyanGFX& gfx, int16_t cx, int16_t cy,
 // ---------------------------------------------------------------------------
 static void fitValueFont(lgfx::LovyanGFX& gfx, const char* s,
                          int16_t radius, int16_t thickness, FontID base) {
-  const int16_t innerW = 2 * (radius - thickness - 1) - 2;
+  const int16_t textR = radius - thickness - 1;
   const FontID candidates[] = { base, FONT_LARGE, FONT_BODY, FONT_SMALL };
   for (FontID f : candidates) {
     // Big fonts never fit the tiny R<30 gauges no matter how narrow the string,
     // so skip them there (preserves the prior portrait-9-slot behaviour).
     if (radius < 30 && (f == FONT_LARGE || f == FONT_XLARGE)) continue;
     setFont(gfx, f);
+#if defined(BOARD_IS_JC3248W535)
+    // The opaque text background is a rectangle; its top/bottom corners must
+    // stay inside the cleared inner circle or they paint over the arc ring.
+    // Budget the chord width at the box edge (+ a couple px for the upward
+    // value nudge / AA fringe), not the full diameter.
+    const int16_t halfH = gfx.fontHeight() / 2 + 3;
+    const int16_t usableHalfW = (textR > halfH)
+        ? (int16_t)sqrtf((float)textR * textR - (float)halfH * halfH) : 0;
+    const int16_t innerW = 2 * usableHalfW - 2;
+#else
+    const int16_t innerW = 2 * textR - 2;
+#endif
     if (gfx.textWidth(s) <= innerW) return;
   }
   setFont(gfx, FONT_SMALL);
