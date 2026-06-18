@@ -475,28 +475,39 @@ static void clearGaugeCenter(lgfx::LovyanGFX& gfx, int16_t cx, int16_t cy,
 // ---------------------------------------------------------------------------
 static void fitValueFont(lgfx::LovyanGFX& gfx, const char* s,
                          int16_t radius, int16_t thickness, FontID base) {
+#if defined(BOARD_IS_JC3248W535)
+  // JC3248W535 draws the value with an opaque background box. The box is a
+  // rectangle; its top/bottom corners must stay inside the cleared inner circle
+  // or they paint over the arc ring. Step the font down (up to the layout base)
+  // until the whole box fits - budgeting the chord width at the box edge
+  // (+ a couple px for the upward value nudge / AA fringe), not the full
+  // diameter. This is what fixes the small split gauges; large gauges where the
+  // base already fits return it on the first iteration, so they are unchanged.
   const int16_t textR = radius - thickness - 1;
   const FontID candidates[] = { base, FONT_LARGE, FONT_BODY, FONT_SMALL };
   for (FontID f : candidates) {
-    // Big fonts never fit the tiny R<30 gauges no matter how narrow the string,
-    // so skip them there (preserves the prior portrait-9-slot behaviour).
     if (radius < 30 && (f == FONT_LARGE || f == FONT_XLARGE)) continue;
     setFont(gfx, f);
-#if defined(BOARD_IS_JC3248W535)
-    // The opaque text background is a rectangle; its top/bottom corners must
-    // stay inside the cleared inner circle or they paint over the arc ring.
-    // Budget the chord width at the box edge (+ a couple px for the upward
-    // value nudge / AA fringe), not the full diameter.
     const int16_t halfH = gfx.fontHeight() / 2 + 3;
     const int16_t usableHalfW = (textR > halfH)
         ? (int16_t)sqrtf((float)textR * textR - (float)halfH * halfH) : 0;
     const int16_t innerW = 2 * usableHalfW - 2;
-#else
-    const int16_t innerW = 2 * textR - 2;
-#endif
     if (gfx.textWidth(s) <= innerW) return;
   }
   setFont(gfx, FONT_SMALL);
+#else
+  // Other panels draw the value transparently (no box), so only the tiny R<30
+  // portrait 9-slot grid needs shrinking; large gauges keep the full base font.
+  // Kept byte-identical to the single-printer behaviour to avoid changing any
+  // normal-view value sizing.
+  if (radius >= 30) { setFont(gfx, base); return; }
+  FontID f = (base == FONT_SMALL) ? FONT_SMALL : FONT_BODY;
+  setFont(gfx, f);
+  if (f != FONT_SMALL) {
+    const int16_t innerW = 2 * (radius - thickness - 1) - 2;
+    if (gfx.textWidth(s) > innerW) setFont(gfx, FONT_SMALL);
+  }
+#endif
 }
 
 // Choose the largest humidity-number font that leaves room for a small "%"
