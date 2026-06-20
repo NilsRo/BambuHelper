@@ -13,6 +13,7 @@
 #include "tasmota.h"
 #include "fonts.h"
 #include "battery.h"
+#include "camera_client.h"
 #include <WiFi.h>
 #include <time.h>
 #if defined(BOARD_IS_SENSECAP) || defined(BOARD_IS_WS350)
@@ -2342,6 +2343,74 @@ static void computeSlotGrid(SlotGrid& g, const PrinterConfig& cfg, bool landscap
 //  Screen: Printing (main dashboard)
 //  Layout: LED bar | header | 2x3 gauge grid | info line
 // ---------------------------------------------------------------------------
+#if defined(BOARD_HAS_CAMERA)
+// ===========================================================================
+//  Camera (#120): thumbnail tile + fullscreen. Source = P1/A1 chamber image
+//  (~1280x720, 16:9). Tile shows a periodic still; fullscreen is live.
+// ===========================================================================
+static const float         CAM_SRC_W = 1280.0f;
+static const float         CAM_SRC_H = 720.0f;
+static const unsigned long CAM_TILE_INTERVAL_MS = 3000;  // periodic-still cadence
+static unsigned long s_camTileLastMs  = 0;
+static uint32_t      s_camTileLastFid = 0xFFFFFFFFu;
+
+// Tile wants a redraw when a new still is due (cadence-throttled).
+static bool cameraTileNeedsRedraw() {
+  if (!cameraActive()) return false;
+  const uint8_t* b; size_t l; uint32_t fid;
+  if (!cameraGetLatestFrame(&b, &l, &fid)) return false;
+  if (fid == s_camTileLastFid) return false;
+  return (millis() - s_camTileLastMs) >= CAM_TILE_INTERVAL_MS;
+}
+
+void drawCameraGauge(int16_t cx, int16_t cy, int16_t radius, bool forceRedraw) {
+  const int16_t box = radius * 2;
+  const int16_t x0 = cx - radius, y0 = cy - radius;
+  if (forceRedraw) tft.fillRect(x0 - 2, y0 - 2, box + 4, box + 4, dispSettings.bgColor);
+
+  const uint8_t* buf; size_t len; uint32_t fid;
+  if (cameraActive() && cameraGetLatestFrame(&buf, &len, &fid)) {
+    const float sc = (float)box / CAM_SRC_W;          // contain by width (16:9)
+    const int dw = (int)(CAM_SRC_W * sc), dh = (int)(CAM_SRC_H * sc);
+    tft.fillRect(x0, y0, box, box, TFT_BLACK);        // viewport letterbox
+    tft.drawJpg(buf, (uint32_t)len, cx - dw / 2, cy - dh / 2, 0, 0, 0, 0, sc, sc);
+    s_camTileLastMs = millis();
+    s_camTileLastFid = fid;
+  } else {
+    tft.fillRect(x0, y0, box, box, dispSettings.bgColor);
+    tft.drawRect(x0, y0, box, box, dispSettings.trackColor);
+    setFont(tft, FONT_SMALL);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(dispSettings.trackColor, dispSettings.bgColor);
+    tft.drawString(cameraActive() ? "..." : "CAM", cx, cy);
+  }
+
+  const bool sm = dispSettings.smallLabels;
+  setFont(tft, sm ? FONT_SMALL : FONT_BODY);
+  tft.setTextDatum(MC_DATUM);
+  tft.setTextColor(dispSettings.trackColor, dispSettings.bgColor);
+  tft.drawString("CAM", cx, cy + radius + (sm ? 3 : -1));
+}
+
+// Fullscreen live view: rotation-aware contain-fit, redraw on new frame only.
+static void drawCameraFullscreen() {
+  static uint32_t lastFid = 0xFFFFFFFFu;
+  const uint8_t* buf; size_t len; uint32_t fid;
+  if (!cameraGetLatestFrame(&buf, &len, &fid)) return;
+  if (fid == lastFid) return;
+  lastFid = fid;
+  const float sw = tft.width(), sh = tft.height();
+  float sc = sw / CAM_SRC_W;
+  if (sh / CAM_SRC_H < sc) sc = sh / CAM_SRC_H;  // contain = min(wfit, hfit)
+  const int dw = (int)(CAM_SRC_W * sc), dh = (int)(CAM_SRC_H * sc);
+  tft.fillScreen(TFT_BLACK);
+  tft.drawJpg(buf, (uint32_t)len, ((int)sw - dw) / 2, ((int)sh - dh) / 2, 0, 0, 0, 0, sc, sc);
+  markFrameDirty();
+}
+#else
+void drawCameraGauge(int16_t, int16_t, int16_t, bool) {}
+#endif
+
 static void drawPrinting() {
   PrinterSlot& p = displayedPrinter();
   BambuState& s = p.state;
@@ -2635,6 +2704,9 @@ static void drawPrinting() {
           case GAUGE_HEATBREAK:     needDraw = animating || s.heatbreakFanPct != prevState.heatbreakFanPct; break;
           case GAUGE_CLOCK:       needDraw = true; break;  // text cache handles actual redraw
           case GAUGE_POWER:       needDraw = true; break;  // watts live in tasmota runtime; text cache + incremental arc gate the redraw
+#if defined(BOARD_HAS_CAMERA)
+          case GAUGE_CAMERA:      needDraw = cameraTileNeedsRedraw(); break;
+#endif
           case GAUGE_LAYER:       needDraw = s.layerNum != prevState.layerNum || s.totalLayers != prevState.totalLayers; break;
           default:
             // AMS humidity / temperature / filament gauges — index derived from enum value
@@ -2757,6 +2829,9 @@ static void drawPrinting() {
           drawPowerGauge(tft, cx, cy, gR,
                          tasmotaGetWattsForSlot(rotState.displayIndex),
                          tasmotaIsActiveForSlot(rotState.displayIndex), "Power", fr);
+          break;
+        case GAUGE_CAMERA:
+          drawCameraGauge(cx, cy, gR, fr);
           break;
         case GAUGE_EMPTY:
           if (fr) tft.fillCircle(cx, cy, gR + 2, dispSettings.bgColor);
@@ -3515,6 +3590,12 @@ void updateDisplay() {
 
     case SCREEN_SPLIT:
       drawSplit();
+      break;
+
+    case SCREEN_CAMERA:
+#if defined(BOARD_HAS_CAMERA)
+      drawCameraFullscreen();
+#endif
       break;
 
     case SCREEN_FINISHED:

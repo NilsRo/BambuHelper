@@ -12,6 +12,7 @@
 #include "led.h"
 #include "tasmota.h"
 #include "battery.h"
+#include "camera_client.h"
 #include <esp_sleep.h>
 #include <driver/gpio.h>
 
@@ -194,6 +195,22 @@ static void doTapActions() {
     }
     return;
   }
+
+#if defined(BOARD_HAS_CAMERA)
+  // Camera tap toggle (#120): tap the camera fullscreen to exit; tap the
+  // printing screen (when it carries a camera tile and the printer can stream)
+  // to enter fullscreen. No-conflict with printer-cycle below: that needs 2+
+  // connections, which the camera gate forbids.
+  if (cur == SCREEN_CAMERA) {
+    setScreenState(SCREEN_PRINTING);
+    return;
+  }
+  if (cur == SCREEN_PRINTING && cameraDisplayedHasCameraTile() &&
+      cameraCanStreamDisplayedPrinter()) {
+    setScreenState(SCREEN_CAMERA);
+    return;
+  }
+#endif
 
   if (getActiveConnCount() >= 2) {
     cycleDisplayedPrinterFromButton();
@@ -405,6 +422,17 @@ static void updateDisplayedPrinterScreenState() {
     }
     return;
   }
+
+#if defined(BOARD_HAS_CAMERA)
+  // Camera fullscreen (#120) is sticky: entered/exited only by tap. Hold it
+  // until the user taps out or the printer can no longer stream, then drop back
+  // to the normal flow (which re-derives the screen next loop).
+  if (current == SCREEN_CAMERA) {
+    if (cameraCanStreamDisplayedPrinter()) return;
+    setScreenState(SCREEN_PRINTING);
+    return;
+  }
+#endif
 
   // Global drying-wake: if any fresh printer state is drying, leave sleep-sticky
   // screens regardless of which slot is currently displayed. Point displayIndex
@@ -803,6 +831,22 @@ void loop() {
   Battery::tick();
   ledTick();
   checkNightMode();
+
+#if defined(BOARD_HAS_CAMERA)
+  // Camera (#120): open the 2nd TLS socket only while the camera UI is on
+  // screen (fullscreen, or printing screen carrying a camera tile) and the
+  // printer can stream; close it otherwise so heap returns to baseline.
+  // Serviced (bounded, non-blocking) before the draw so the frame is fresh.
+  {
+    bool wantCamera = cameraCanStreamDisplayedPrinter() &&
+        (getScreenState() == SCREEN_CAMERA ||
+         (getScreenState() == SCREEN_PRINTING && cameraDisplayedHasCameraTile()));
+    if (wantCamera && !cameraActive())      cameraBegin();
+    else if (!wantCamera && cameraActive()) cameraStop();
+    cameraService();
+  }
+#endif
+
   updateDisplay();
 
   // MQTT and rotation after display update - TLS reconnect can block for
