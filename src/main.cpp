@@ -861,14 +861,16 @@ void loop() {
     if (getScreenState() != SCREEN_CAMERA) handleRotation();
   }
 
-#if defined(BOARD_HAS_CAMERA)
-  // Blocking camera socket work (connect can stall up to the TLS timeout) - run
-  // last, alongside the MQTT tail, so a stalled connect never delays UI or MQTT.
-  cameraService();
-#endif
-
   // Commit the framebuffer sprite to the panel. On JC3248W535 this is a
   // ~20ms QSPI push (300 KB @ 32MHz QIO); on all other boards it's a no-op
   // since draws go directly to the panel.
   flushFrame();
+
+#if defined(BOARD_HAS_CAMERA)
+  // Blocking camera socket work (connect can stall up to the TLS timeout) runs
+  // dead last - AFTER flushFrame() - so on the framebuffer board (JC3248W535,
+  // where draws are only visible once pushed) a stalled connect never delays the
+  // already-rendered frame, only the start of the next loop.
+  cameraService();
+#endif
 }
