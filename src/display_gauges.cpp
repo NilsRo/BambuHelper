@@ -510,6 +510,16 @@ static FontID fitHumidityValueFont(lgfx::LovyanGFX& gfx, const char* value,
 // needed.
 static void setGaugeClearedTextColor(lgfx::LovyanGFX& gfx,
                                      uint16_t fg, uint16_t bg) {
+#if defined(BOARD_IS_JC3248W535)
+  // Transparent value text fixed the smaller dual-printer gauges in PORTRAIT,
+  // but the rotated (landscape) JC sprite renders transparent antialiased text
+  // black. Keep the explicit background in landscape, where the opaque box was
+  // always fine; stay transparent in portrait.
+  if (dispSettings.rotation == 1 || dispSettings.rotation == 3) {
+    gfx.setTextColor(fg, bg);
+    return;
+  }
+#endif
   (void)bg;
   gfx.setTextColor(fg);
 }
