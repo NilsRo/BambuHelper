@@ -788,7 +788,9 @@ void drawPowerGauge(lgfx::LovyanGFX& gfx, int16_t cx, int16_t cy, int16_t radius
   uint16_t fillEnd = startAngle + (uint16_t)(ratio * 240.0f);
   if (fillEnd > 300) fillEnd = 300;
 
-  uint16_t arcColor = (active && w > 0.5f) ? dispSettings.power.arc : CLR_TEXT_DIM;
+  bool hasPower = active && w > 0.5f;
+  uint16_t arcColor = hasPower ? dispSettings.power.arc : CLR_TEXT_DIM;
+  uint16_t labelColor = hasPower ? dispSettings.power.label : CLR_TEXT_DIM;
   uint16_t drawFill = (ratio > 0.01f) ? fillEnd : startAngle;
   drawArcFill(gfx, cx, cy, radius, thickness, drawFill, arcColor, forceRedraw);
 
@@ -850,7 +852,7 @@ void drawPowerGauge(lgfx::LovyanGFX& gfx, int16_t cx, int16_t cy, int16_t radius
     bool sm = dispSettings.smallLabels;
     gfx.setTextDatum(MC_DATUM);
     setFont(gfx, sm ? FONT_SMALL : FONT_BODY);
-    gfx.setTextColor(dispSettings.power.label, bg);
+    gfx.setTextColor(labelColor, bg);
     gfx.drawString(label, cx, cy + radius + (sm ? 3 : -1));
   }
 }

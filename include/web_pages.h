@@ -2244,8 +2244,9 @@ function resetGaugeColors(){
 }
 function randomGaugeColors(){
   var baseH = Math.floor(Math.random() * 360);
+  var hueStep = 360 / GAUGE_KEYS.length;
   for (var i = 0; i < GAUGE_KEYS.length; i++){
-    var h = (baseH + i * 36) % 360, hex = hslToHex(h, 70, 55);
+    var h = (baseH + i * hueStep) % 360, hex = hslToHex(h, 70, 55);
     document.getElementById(GAUGE_KEYS[i] + '_a').value = hex;
     document.getElementById(GAUGE_KEYS[i] + '_l').value = hex;
     document.getElementById(GAUGE_KEYS[i] + '_v').value = '#FFFFFF';
