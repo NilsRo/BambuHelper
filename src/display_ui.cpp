@@ -855,13 +855,6 @@ static uint8_t dryDisplayIdx = 0;           // which drying unit we're showing
 static unsigned long dryRotateMs = 0;       // last rotation timestamp
 static const unsigned long DRY_ROTATE_MS = 60000;  // 60s rotation interval
 
-static uint16_t humidityColor(uint8_t level) {
-  if (level <= 2) return CLR_GREEN;
-  if (level == 3) return CLR_YELLOW;
-  if (level == 4) return CLR_ORANGE;
-  return CLR_RED;
-}
-
 // Draw a string left-aligned, hard-truncating at character boundary if it
 // doesn't fit maxW. No ellipsis.
 // Assumes font and text color are already configured by the caller.
@@ -1075,7 +1068,7 @@ static void drawIdleDrying(PrinterSlot& p) {
       tft.setTextColor(CLR_TEXT_DIM, CLR_BG);
       tft.drawString("Humidity", infoCx, 128);
       setFont(tft, FONT_LARGE);
-      tft.setTextColor(humidityColor(u.humidity), CLR_BG);
+      tft.setTextColor(amsHumidityColor(u.humidityRaw, u.humidity, u.present), CLR_BG);
       tft.drawString(humBuf, infoCx, 152);
     }
   } else {
@@ -1122,7 +1115,7 @@ static void drawIdleDrying(PrinterSlot& p) {
 
       tft.setTextDatum(MC_DATUM);
       setFont(tft, FONT_LARGE);
-      tft.setTextColor(humidityColor(u.humidity), CLR_BG);
+      tft.setTextColor(amsHumidityColor(u.humidityRaw, u.humidity, u.present), CLR_BG);
       tft.drawString(humBuf, cx, humY);
     }
   }
@@ -1167,7 +1160,7 @@ static void drawIdleDrying(PrinterSlot& p) {
 
     tft.setTextDatum(MC_DATUM);
     setFont(tft, FONT_BODY);
-    tft.setTextColor(humidityColor(u.humidity), CLR_BG);
+    tft.setTextColor(amsHumidityColor(u.humidityRaw, u.humidity, u.present), CLR_BG);
     tft.drawString(humBuf, cx, 170);
   }
 #endif

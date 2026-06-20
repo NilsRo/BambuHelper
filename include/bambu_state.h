@@ -34,8 +34,8 @@ struct AmsTray {
 struct AmsUnit {
   bool     present;               // unit detected in MQTT data
   uint8_t  id;                    // raw id from MQTT (0-3 for AMS2, 128 for AMS HT)
-  uint8_t  humidity;              // 0-5 scale (lower = dryer)
-  uint8_t  humidityRaw;           // raw sensor value (likely %RH or similar)
+  uint8_t  humidity;              // 0-5 scale; direction can vary by AMS model/firmware
+  uint8_t  humidityRaw;           // raw RH percent when reported; preferred for display color
   float    temp;                  // current temperature inside AMS
   uint16_t dryRemainMin;          // minutes remaining, 0 = not drying
   uint16_t dryTotalMin;           // captured at drying start (for progress calc)

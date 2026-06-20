@@ -857,8 +857,26 @@ void drawPowerGauge(lgfx::LovyanGFX& gfx, int16_t cx, int16_t cy, int16_t radius
   }
 }
 
+uint16_t amsHumidityColor(uint8_t humidityRaw, uint8_t humidityLevel, bool present) {
+  if (!present) return CLR_TEXT_DIM;
+
+  // Raw RH is consistent across mixed AMS generations; humidity level is not.
+  if (humidityRaw >= 1 && humidityRaw <= 100) {
+    if (humidityRaw <= 35) return CLR_GREEN;
+    if (humidityRaw <= 50) return CLR_YELLOW;
+    if (humidityRaw <= 65) return CLR_ORANGE;
+    return CLR_RED;
+  }
+
+  if (humidityLevel == 0) return CLR_TEXT_DIM;
+  if (humidityLevel <= 2) return CLR_GREEN;
+  if (humidityLevel == 3) return CLR_YELLOW;
+  if (humidityLevel == 4) return CLR_ORANGE;
+  return CLR_RED;
+}
+
 // ---------------------------------------------------------------------------
-//  AMS humidity gauge (percentage from humidityRaw, color from humidity level)
+//  AMS humidity gauge (percentage from humidityRaw, color from raw RH/level)
 // ---------------------------------------------------------------------------
 void drawHumidityGauge(lgfx::LovyanGFX& gfx, int16_t cx, int16_t cy, int16_t radius,
                        uint8_t humidityRaw, uint8_t humidityLevel, bool present,
@@ -874,18 +892,7 @@ void drawHumidityGauge(lgfx::LovyanGFX& gfx, int16_t cx, int16_t cy, int16_t rad
   uint16_t fillEnd = startAngle + (uint16_t)(pct * 240 / 100);
   if (fillEnd > 300) fillEnd = 300;
 
-  // Color based on humidity level (0-5): lower = dryer = greener, higher = wetter = redder.
-  // This matches the humidityColor() convention used by the AMS Drying screen.
-  uint16_t arcColor;
-  if (!present || humidityLevel == 0) {
-    arcColor = CLR_TEXT_DIM;
-  } else if (humidityLevel <= 2) {
-    arcColor = CLR_GREEN;
-  } else if (humidityLevel <= 3) {
-    arcColor = CLR_YELLOW;
-  } else {
-    arcColor = CLR_RED;
-  }
+  uint16_t arcColor = amsHumidityColor(humidityRaw, humidityLevel, present);
 
   uint16_t drawFill = (pct > 0) ? fillEnd : startAngle;
   drawArcFill(gfx, cx, cy, radius, thickness, drawFill, arcColor, forceRedraw);
@@ -1111,22 +1118,11 @@ void drawAmsFilamentAllGauge(lgfx::LovyanGFX& gfx, int16_t cx, int16_t cy, int16
                         && unitIndex < ams.unitCount
                         && ams.units[unitIndex].present;
 
-  // Humidity color scale: matches humidityColor() convention (lower = dryer).
-  static const uint16_t humidColors[6] = {
-    0x18E3,  // 0 - dim (no data / unknown)
-    0x07E0,  // 1 - green (very dry)
-    0xAFE5,  // 2 - light green (dry)
-    0xFFE0,  // 3 - yellow (moderate)
-    0xFC80,  // 4 - orange (humid)
-    0xF800   // 5 - red (very wet)
-  };
-
-  uint8_t humidLevel = 0;
-  if (unitPresent) {
-    humidLevel = ams.units[unitIndex].humidity;
-    if (humidLevel > 5) humidLevel = 5;
-  }
-  uint16_t hColor = humidColors[humidLevel];
+  uint16_t hColor = unitPresent
+      ? amsHumidityColor(ams.units[unitIndex].humidityRaw,
+                         ams.units[unitIndex].humidity,
+                         true)
+      : CLR_TEXT_DIM;
 
   // Quadrant geometry: TL=Slot1, TR=Slot2, BR=Slot3, BL=Slot4
   static const int8_t qSlotX[4] = {-1, 1, 1, -1};
