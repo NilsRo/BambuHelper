@@ -15,13 +15,19 @@
 #include <stddef.h>
 
 // --- Gates -----------------------------------------------------------------
-// True only when a 2nd TLS socket to a P1/A1 camera is sane: camera board,
-// exactly one live MQTT connection (TLS/heap budget), displayed printer is a
-// LAN-mode P1/A1 with an access code. Called by every draw/service path.
+// True only when a 2nd/3rd TLS socket to a P1/A1 camera is sane: camera board,
+// at most 2 live MQTT connections (3 TLS, the proven ceiling), displayed printer
+// is a LAN-mode P1/A1 with an access code. Called by every draw/service path.
 bool cameraCanStreamDisplayedPrinter();
 
-// True when the displayed printer has a GAUGE_CAMERA tile in any slot.
+// True when the displayed printer has a GAUGE_CAMERA tile in a slot that is
+// actually visible in the current layout (standard grid always; extras only in
+// their active 8/9-slot mode).
 bool cameraDisplayedHasCameraTile();
+
+// True if not streaming, or streaming the IP of the currently displayed printer.
+// The loop stops a mismatched stream so frames never belong to a stale printer.
+bool cameraStreamingDisplayed();
 
 // --- Lifecycle -------------------------------------------------------------
 void cameraBegin();    // start streaming the displayed printer (no-op if gate fails)

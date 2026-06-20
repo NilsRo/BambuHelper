@@ -15,16 +15,18 @@
 #include "settings.h"
 
 // --- tunables --------------------------------------------------------------
-static const uint16_t CAM_PORT          = 6000;
-static const uint32_t CAM_BUF_SIZE      = 200 * 1024;  // max single JPEG (PSRAM)
-static const uint32_t CAM_CONNECT_EVERY = 2000;        // ms between connect tries
-static const uint8_t  CAM_TLS_TIMEOUT_S = 5;
-static const int      CAM_READ_BUDGET   = 16 * 1024;   // max bytes drained / loop
-static const size_t   CAM_CHUNK         = 1460;
+static const uint16_t CAM_PORT           = 6000;
+static const uint32_t CAM_BUF_SIZE       = 200 * 1024; // max single JPEG (PSRAM)
+static const uint32_t CAM_CONNECT_MIN_MS = 2000;       // first retry gap after a failed connect
+static const uint32_t CAM_CONNECT_MAX_MS = 16000;      // backoff cap (connect() blocks ~timeout)
+static const uint8_t  CAM_TLS_TIMEOUT_S  = 3;          // keep a blocking connect short
+static const int      CAM_READ_BUDGET    = 16 * 1024;  // max bytes drained / loop
+static const size_t   CAM_CHUNK          = 1460;
 
 // --- state -----------------------------------------------------------------
 static bool              g_active = false;
 static WiFiClientSecure* g_tls    = nullptr;
+static uint32_t          g_connectBackoffMs = CAM_CONNECT_MIN_MS;
 
 static uint8_t* g_inflight = nullptr;   // accumulates until a full SOI..EOI
 static uint32_t g_inflightLen = 0;
@@ -63,13 +65,33 @@ bool cameraCanStreamDisplayedPrinter() {
 
 bool cameraDisplayedHasCameraTile() {
   PrinterConfig& c = displayedPrinter().config;
+  // Standard 2x3 slots are always on screen.
   for (uint8_t i = 0; i < GAUGE_SLOT_COUNT; i++)
     if (c.gaugeSlots[i] == GAUGE_CAMERA) return true;
-  for (uint8_t i = 0; i < LANDSCAPE_EXTRA_COUNT; i++)
-    if (c.landscapeExtras[i] == GAUGE_CAMERA) return true;
-  for (uint8_t i = 0; i < PORTRAIT_EXTRA_COUNT; i++)
-    if (c.portraitExtras[i] == GAUGE_CAMERA) return true;
+  // Extra slots only render in their active layout, so only count them there -
+  // a camera placed in an inactive extra grid must not open the socket or grab
+  // tap-to-fullscreen when no CAM tile is actually visible.
+  const bool landscape = (dispSettings.rotation == 1 || dispSettings.rotation == 3);
+  if (landscape && dispSettings.landscape8Slots) {
+    for (uint8_t i = 0; i < LANDSCAPE_EXTRA_COUNT; i++)
+      if (c.landscapeExtras[i] == GAUGE_CAMERA) return true;
+  }
+  if (!landscape && dispSettings.portrait9Slots) {
+    for (uint8_t i = 0; i < PORTRAIT_EXTRA_COUNT; i++)
+      if (c.portraitExtras[i] == GAUGE_CAMERA) return true;
+  }
   return false;
+}
+
+// True when the camera is not streaming, or is streaming the IP that matches the
+// currently displayed printer. The loop stops a mismatched stream (rotation can
+// move displayIndex while a socket is open) so the tile/fullscreen never shows a
+// previous printer's frames.
+bool cameraStreamingDisplayed() {
+  if (!g_active) return true;
+  PrinterSlot& p = displayedPrinter();
+  const char* ip = p.config.ip[0] ? p.config.ip : p.state.localIp;
+  return ip[0] && strcmp(ip, g_ip) == 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -165,6 +187,7 @@ void cameraBegin() {
   g_publishedLen = 0;
   g_frameId = 0;
   g_lastConnectMs = 0;
+  g_connectBackoffMs = CAM_CONNECT_MIN_MS;
   g_active = true;
 }
 
@@ -181,7 +204,10 @@ void cameraService() {
 
   if (!g_tls || !g_tls->connected()) {
     unsigned long now = millis();
-    if (now - g_lastConnectMs < CAM_CONNECT_EVERY) return;  // rate-limit blocking connect
+    // connect() is blocking (up to the TLS timeout). Space attempts by a growing
+    // backoff so an unreachable port 6000 cannot stall the loop every couple of
+    // seconds; the gap always exceeds the connect timeout.
+    if (now - g_lastConnectMs < g_connectBackoffMs) return;
     g_lastConnectMs = now;
     if (ESP.getFreeHeap() < BAMBU_MIN_FREE_HEAP) return;
     if (!g_tls) {
@@ -191,9 +217,15 @@ void cameraService() {
       g_tls->setTimeout(CAM_TLS_TIMEOUT_S);
     }
     esp_task_wdt_reset();
-    if (!g_tls->connect(g_ip, CAM_PORT)) { teardownSocket(); return; }
+    if (!g_tls->connect(g_ip, CAM_PORT)) {
+      teardownSocket();
+      g_connectBackoffMs *= 2;
+      if (g_connectBackoffMs > CAM_CONNECT_MAX_MS) g_connectBackoffMs = CAM_CONNECT_MAX_MS;
+      return;
+    }
     sendAuth();
     g_inflightLen = 0;
+    g_connectBackoffMs = CAM_CONNECT_MIN_MS;  // reset on success
   }
 
   int budget = CAM_READ_BUDGET;
@@ -224,6 +256,7 @@ bool cameraGetLatestFrame(const uint8_t** buf, size_t* len, uint32_t* frameId) {
 
 bool cameraCanStreamDisplayedPrinter() { return false; }
 bool cameraDisplayedHasCameraTile() { return false; }
+bool cameraStreamingDisplayed() { return true; }
 void cameraBegin() {}
 void cameraStop() {}
 bool cameraActive() { return false; }
