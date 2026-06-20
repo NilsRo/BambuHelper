@@ -12,6 +12,7 @@
 #include "led.h"
 #include "tasmota.h"
 #include "battery.h"
+#include "camera_client.h"
 #include <esp_sleep.h>
 #include <driver/gpio.h>
 
@@ -194,6 +195,23 @@ static void doTapActions() {
     }
     return;
   }
+
+#if defined(BOARD_HAS_CAMERA)
+  // Camera tap toggle (#120). On a multi-printer setup the camera sits in the
+  // tap cycle for the printer that carries the tile: tapping that printer opens
+  // fullscreen, and tapping out advances to the next printer (so the cycle keeps
+  // moving instead of stranding the user here until the next auto-rotate).
+  if (cur == SCREEN_CAMERA) {
+    setScreenState(SCREEN_PRINTING);
+    if (getActiveConnCount() >= 2) cycleDisplayedPrinterFromButton();
+    return;
+  }
+  if (cur == SCREEN_PRINTING && cameraDisplayedHasCameraTile() &&
+      cameraCanStreamDisplayedPrinter()) {
+    setScreenState(SCREEN_CAMERA);
+    return;
+  }
+#endif
 
   if (getActiveConnCount() >= 2) {
     cycleDisplayedPrinterFromButton();
@@ -405,6 +423,17 @@ static void updateDisplayedPrinterScreenState() {
     }
     return;
   }
+
+#if defined(BOARD_HAS_CAMERA)
+  // Camera fullscreen (#120) is sticky: entered/exited only by tap. Hold it
+  // until the user taps out or the printer can no longer stream, then drop back
+  // to the normal flow (which re-derives the screen next loop).
+  if (current == SCREEN_CAMERA) {
+    if (cameraCanStreamDisplayedPrinter()) return;
+    setScreenState(SCREEN_PRINTING);
+    return;
+  }
+#endif
 
   // Global drying-wake: if any fresh printer state is drying, leave sleep-sticky
   // screens regardless of which slot is currently displayed. Point displayIndex
@@ -803,6 +832,22 @@ void loop() {
   Battery::tick();
   ledTick();
   checkNightMode();
+
+#if defined(BOARD_HAS_CAMERA)
+  // Camera (#120) lifecycle (cheap, non-blocking): open the 2nd TLS socket only
+  // while the camera UI is on screen (fullscreen, or printing screen with a
+  // visible camera tile) and the printer can stream; close it otherwise so heap
+  // returns to baseline, or if rotation moved the displayed printer out from
+  // under an open stream. The blocking socket work runs in the tail below.
+  {
+    bool wantCamera = cameraCanStreamDisplayedPrinter() &&
+        (getScreenState() == SCREEN_CAMERA ||
+         (getScreenState() == SCREEN_PRINTING && cameraDisplayedHasCameraTile()));
+    if (cameraActive() && (!wantCamera || !cameraStreamingDisplayed())) cameraStop();
+    if (wantCamera && !cameraActive())                                  cameraBegin();
+  }
+#endif
+
   updateDisplay();
 
   // MQTT and rotation after display update - TLS reconnect can block for
@@ -811,11 +856,21 @@ void loop() {
   // and a concurrent second TLS session to Bambu Cloud is unsupported.
   if (isWiFiConnected() && !isAPMode() && isAnyPrinterConfigured() && !isOtaAutoInProgress()) {
     handleBambuMqtt();
-    handleRotation();
+    // Freeze auto-rotation while the camera fullscreen is up so the displayed
+    // printer (and its stream) does not drift out from under the view.
+    if (getScreenState() != SCREEN_CAMERA) handleRotation();
   }
 
   // Commit the framebuffer sprite to the panel. On JC3248W535 this is a
   // ~20ms QSPI push (300 KB @ 32MHz QIO); on all other boards it's a no-op
   // since draws go directly to the panel.
   flushFrame();
+
+#if defined(BOARD_HAS_CAMERA)
+  // Blocking camera socket work (connect can stall up to the TLS timeout) runs
+  // dead last - AFTER flushFrame() - so on the framebuffer board (JC3248W535,
+  // where draws are only visible once pushed) a stalled connect never delays the
+  // already-rendered frame, only the start of the next loop.
+  cameraService();
+#endif
 }

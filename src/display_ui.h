@@ -19,7 +19,8 @@ enum ScreenState {
   SCREEN_CLOCK,
   SCREEN_OFF,
   SCREEN_OTA_UPDATE,
-  SCREEN_SPLIT          // two printers side-by-side (top/bottom bands)
+  SCREEN_SPLIT,         // two printers side-by-side (top/bottom bands)
+  SCREEN_CAMERA         // fullscreen P1/A1 chamber image (#120); tap to exit
 };
 
 // Forward declaration so split-related declarations below can take an AmsState
@@ -75,5 +76,10 @@ bool isDisplayForceRedraw();
 // in display_ui.cpp; exported so the split renderer can draw it inside a band.
 void drawAmsBarsGauge(int16_t cx, int16_t cy, int16_t radius,
                       const AmsState& ams, uint8_t unitIndex, bool forceRedraw);
+
+// Camera thumbnail tile (#120). Draws the latest chamber-image still into the
+// slot, or a placeholder when not streaming. Exported so the split renderer can
+// draw the inert placeholder inside a band. No-op visual on non-camera boards.
+void drawCameraGauge(int16_t cx, int16_t cy, int16_t radius, bool forceRedraw);
 
 #endif // DISPLAY_UI_H

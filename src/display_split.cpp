@@ -169,6 +169,7 @@ bool tileValueChanged(uint8_t gt, const BambuState& s, const BambuState& p) {
     case GAUGE_HEATBREAK:     return s.heatbreakFanPct != p.heatbreakFanPct;
     case GAUGE_CLOCK:         return true;   // text cache gates the actual redraw
     case GAUGE_POWER:         return true;   // watts live outside BambuState
+    case GAUGE_CAMERA:        return false;  // never streams in split (multi-printer); placeholder only
     case GAUGE_LAYER:         return s.layerNum != p.layerNum || s.totalLayers != p.totalLayers;
     default: break;
   }
@@ -262,6 +263,9 @@ void drawTile(uint8_t gt, const BambuState& s, uint8_t slotIndex,
     case GAUGE_POWER:
       drawPowerGauge(tft, cx, cy, r, tasmotaGetWattsForSlot(slotIndex),
                      tasmotaIsActiveForSlot(slotIndex), "Power", fr);
+      break;
+    case GAUGE_CAMERA:
+      drawCameraGauge(cx, cy, r, fr);  // inert placeholder in split (camera disabled with 2+ printers)
       break;
     case GAUGE_EMPTY:
       if (fr) tft.fillCircle(cx, cy, r + 2, CLR_BG);

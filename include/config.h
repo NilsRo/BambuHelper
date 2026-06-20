@@ -113,6 +113,17 @@
 #endif
 
 // =============================================================================
+//  Camera live view (issue #120)
+// =============================================================================
+// A P1/A1 LAN camera needs a 2nd TLS socket + a full-JPEG PSRAM buffer + touch.
+// Only these two boards qualify (8 MB PSRAM + touch); BOARD_HAS_PSRAM is too
+// broad (it also covers esp32s3_zero/_320/sensecap). Every camera code path is
+// compiled behind BOARD_HAS_CAMERA; other boards link no-op stubs.
+#if defined(BOARD_IS_JC3248W535) || defined(BOARD_IS_WS350)
+#define BOARD_HAS_CAMERA      1
+#endif
+
+// =============================================================================
 //  Display rotation (multi-printer)
 // =============================================================================
 #define ROTATE_INTERVAL_MS    60000   // default auto-rotate: 1 min

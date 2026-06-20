@@ -1666,9 +1666,10 @@ var gaugeTypes = [
   {name:'AMS 4 Bars',         group:'AMS filament (bars)'},/* 28 */
   {name:'Nozzle R Temp',      group:'Temperatures'},      /* 29 */
   {name:'Nozzle L Temp',      group:'Temperatures'},      /* 30 */
-  {name:'Power',              group:'Other'}              /* 31 */
+  {name:'Power',              group:'Other'},             /* 31 */
+  {name:'Camera (P1/A1 LAN)', group:'Other'}              /* 32 */
 ];
-var GAUGE_REQUIRES = { 23: 'hasAuxFanRight', 24: 'hasExhaustFan', 29: 'hasDualNozzle', 30: 'hasDualNozzle', 31: 'hasTasmota' };
+var GAUGE_REQUIRES = { 23: 'hasAuxFanRight', 24: 'hasExhaustFan', 29: 'hasDualNozzle', 30: 'hasDualNozzle', 31: 'hasTasmota', 32: 'hasLanCamera' };
 var gaugeCaps = {}, persistedGauges = {};
 function gaugeAllowed(idx){
   if (persistedGauges[idx]) return true;

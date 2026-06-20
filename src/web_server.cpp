@@ -660,6 +660,19 @@ static void handlePrinterConfig() {
   doc["hasExhaustFan"]  = (st.airductFuncs & (1u << 2)) != 0;  // X2D + H2C
   doc["hasDualNozzle"]  = st.dualNozzle;                       // H2D/H2C/X2D per-nozzle temp gauges
   doc["hasTasmota"]     = tasmotaConfiguredForSlot(slot);      // gates the Power gauge option
+#if defined(BOARD_HAS_CAMERA)
+  // Camera gauge: only LAN-mode P1/A1 with an access code serve the port-6000
+  // chamber image. (P1S=01P, P1P=01S, A1=039, A1mini=030.)
+  {
+    const char* cs = cfg.serial;
+    bool p1a1 = strlen(cs) >= 3 &&
+                (strncmp(cs, "01P", 3) == 0 || strncmp(cs, "01S", 3) == 0 ||
+                 strncmp(cs, "039", 3) == 0 || strncmp(cs, "030", 3) == 0);
+    doc["hasLanCamera"] = (cfg.mode == CONN_LOCAL) && cfg.accessCode[0] && p1a1;
+  }
+#else
+  doc["hasLanCamera"] = false;
+#endif
   JsonArray slots = doc["gaugeSlots"].to<JsonArray>();
   for (uint8_t g = 0; g < GAUGE_SLOT_COUNT; g++) slots.add(cfg.gaugeSlots[g]);
   JsonArray lext = doc["landscapeExtras"].to<JsonArray>();
