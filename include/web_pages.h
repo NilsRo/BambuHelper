@@ -2301,7 +2301,10 @@ function resetGaugeColors(){
 }
 function clearGaugeLabels(){
   for (var i = 0; i < GAUGE_LABEL_KEYS.length; i++){
-    document.getElementById(GAUGE_LABEL_KEYS[i] + '_lbl').value = '';
+    var k = GAUGE_LABEL_KEYS[i];
+    // Door has no built-in fallback (empty = icon only, an intentional mode), so
+    // "clear to defaults" must write its default text rather than blank it.
+    document.getElementById(k + '_lbl').value = (k === 'dor') ? 'Door' : '';
   }
   applyDisplay();
 }
