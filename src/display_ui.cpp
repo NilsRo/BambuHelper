@@ -1980,9 +1980,9 @@ static void drawAmsStrip(const AmsState& ams,
       bool sm = dispSettings.smallLabels;
       setFont(tft, sm ? FONT_SMALL : FONT_BODY);
       tft.setTextColor(CLR_TEXT_DIM, CLR_BG);
-      char eb[20];
-      ellipsizeToWidth(tft, label, groupW - 2, eb, sizeof(eb));
-      tft.drawString(eb, groupX + groupW / 2, labelY + (showFilamentTypes ? 0 : 2));
+      // Draw the unit label in full (no ellipsis), matching pre-#124 behavior so
+      // short labels like "AMS A" are never clipped to "AMS.." in narrow groups.
+      tft.drawString(label, groupX + groupW / 2, labelY + (showFilamentTypes ? 0 : 2));
     }
   }
 }
@@ -2180,9 +2180,8 @@ static void drawAmsZone(const BambuState& s, bool force) {
       bool sm = dispSettings.smallLabels;
       setFont(tft, sm ? FONT_SMALL : FONT_BODY);
       tft.setTextColor(CLR_TEXT_DIM, CLR_BG);
-      char eb[20];
-      ellipsizeToWidth(tft, label, LY_LAND_AMS_W - 2, eb, sizeof(eb));
-      tft.drawString(eb, LY_LAND_AMS_X + LY_LAND_AMS_W / 2, gy + barH + 1);
+      // Full draw (no ellipsis), pre-#124 behavior - see drawAmsStrip note above.
+      tft.drawString(label, LY_LAND_AMS_X + LY_LAND_AMS_W / 2, gy + barH + 1);
     }
 
   } else if (enhanced) {

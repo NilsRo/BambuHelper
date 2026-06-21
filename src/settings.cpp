@@ -174,7 +174,7 @@ void defaultDisplaySettings(DisplaySettings& ds) {
   ds.hideClockDate = false;
   ds.showClockInfo = false;
   ds.amsTrayTypes = true;       // default ON: preserves existing per-tray labels
-  ds.showBatteryIndicator = true;
+  ds.showBatteryIndicator = false;  // default OFF on all boards; enable per device
   ds.hideStatusReadout = false; // default ON-screen readout stays visible
   ds.nozzleScaleMax  = GAUGE_NOZZLE_SCALE_DEFAULT;
   ds.bedScaleMax     = GAUGE_BED_SCALE_DEFAULT;
